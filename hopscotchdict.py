@@ -1,10 +1,12 @@
-#__getitem__, __setitem__, __delitem__, __iter__, __len__, pop, popitem, clear, update, and setdefault
+#pop, popitem, update, and setdefault
 
 from __future__ import division
 from array import array
 from collections import MutableMapping
 from itertools import izip
 from sys import maxint
+
+import pdb
 
 class HopscotchDict(MutableMapping):
 
@@ -24,15 +26,15 @@ class HopscotchDict(MutableMapping):
 	def _make_indices(size):
 		if size <= 2**7: return array("b", [HopscotchDict.FREE_ENTRY]) * size
 		if size <= 2**15: return array("h", [HopscotchDict.FREE_ENTRY]) * size
-		if size <= 2**31: return array("l", [HopscotchDict.FREE_ENTRY]) * size
-		return [HopscotchDict.FREE_ENTRY] * size
+		if size <= 2**31: return array("i", [HopscotchDict.FREE_ENTRY]) * size
+		return array("l", [HopscotchDict.FREE_ENTRY]) * size
 
 	@staticmethod
 	def _make_nbhds(nbhd_size, array_size):
 		if nbhd_size == 8: return array("B", [0]) * array_size
 		if nbhd_size == 16: return array("H", [0]) * array_size
-		if nbhd_size == 32: return array("L", [0]) * array_size
-		return [0L] * array_size
+		if nbhd_size == 32: return array("I", [0]) * array_size
+		return array("L", [0]) * array_size
 
 	def _clear_neighbor(self, idx, nbhd_idx):
 		if nbhd_idx >= self._nbhd_size:
@@ -52,10 +54,12 @@ class HopscotchDict(MutableMapping):
 			# move the pointer in the given index to the open index and update
 			# the given index's neighborhood
 			elif act_idx - idx < self._nbhd_size:
+#				pdb.set_trace()
 				self._indices[act_idx] = self._indices[idx]
 				self._set_neighbor(idx, act_idx - idx)
 				self._indices[idx] = self.FREE_ENTRY
-				_clear_neighbor(idx, 0)
+				self._clear_neighbor(idx, 0)
+				return
 
 			# The open index is too far away, so find the closest index to the
 			# given index to free up and repeat until the given index is opened
@@ -74,7 +78,7 @@ class HopscotchDict(MutableMapping):
 						self._indices[act_idx] = self._indices[hop_idx]
 						self._indices[hop_idx] = self.FREE_ENTRY
 						self._set_neighbor(i, act_idx - i)
-						_clear_neighbor(i, hop_idx - i)
+						self._clear_neighbor(i, hop_idx - i)
 						act_idx = hop_idx
 						break
 
@@ -150,7 +154,7 @@ class HopscotchDict(MutableMapping):
 						continue
 					else:
 						self._indices[act_idx] = data_idx
-						_set_index(exp_idx, act_idx - exp_idx)
+						self._set_neighbor(exp_idx, act_idx - exp_idx)
 						break
 
 	def _set_neighbor(self, idx, nbhd_idx):
@@ -206,7 +210,7 @@ class HopscotchDict(MutableMapping):
 		exp_idx = abs(hash(key)) % self._size
 		act_idx = self._lookup(key)
 
-		# Overwrite the existing data
+		# Overwrite an existing key with new data
 		if act_idx:
 			if self._indices[act_idx] != FREE_ENTRY:
 				self._keys[self._indices[act_idx]] = key
@@ -226,10 +230,10 @@ class HopscotchDict(MutableMapping):
 			else:
 				raise Exception("_lookup returned a previously-freed index")
 
-		# Move existing data out to accomodate new data
+		# Move existing data out of index to accomodate new data
 		elif self._indices[exp_idx] != self.FREE_ENTRY:
 			try:
-				_free_up(exp_idx)
+				self._free_up(exp_idx)
 
 			# No way to keep neighborhood invariant, resize and try again
 			except Exception:
@@ -240,43 +244,28 @@ class HopscotchDict(MutableMapping):
 
 				self.__setitem__(key, value)
 
-			# Successfully opened up expected index, add data and finish
+		# Index never previously stored data or it was successfully moved,
+		# Either way, add the new data to its expected index
+		self._indices[exp_idx] = self._count
+		self._keys.append(key)
+		self._values.append(value)
+		self._hashes.append(abs(hash(key)))
+		self._set_neighbor(exp_idx, 0)
+		self._count += 1
+		if not (len(self._keys) == len(self._values) == len(self._hashes)):
+			raise AssertionError((
+				"Number of keys {0}; "
+				"number of values {1}; "
+				"number of hashes {2}").format(
+					len(self._keys),
+					len(self._values),
+					len(self._hashes)))
+
+		if self._count / self._size >= self.MAX_DENSITY:
+			if self._size < 2**16:
+				self._resize(self._size * 4)
 			else:
-				self._keys[self._indices[exp_idx]] = key
-				self._values[self._indices[exp_idx]] = value
-				self._hashes[self._indices[exp_idx]] = abs(hash(key))
-				self._set_neighbor(exp_idx, 0)
-				if not (len(self._keys) == len(self._values) == len(self._hashes)):
-					raise AssertionError((
-						"Number of keys {0}; "
-						"number of values {1}; "
-						"number of hashes {2}").format(
-							len(self._keys),
-							len(self._values),
-							len(self._hashes)))
-
-		# Add data to its expected index
-		else:
-			self._indices[exp_idx] = self._count
-			self._keys.append(key)
-			self._values.append(value)
-			self._hashes.append(abs(hash(key)))
-			self._set_neighbor(exp_idx, 0)
-			self._count += 1
-			if not (len(self._keys) == len(self._values) == len(self._hashes)):
-				raise AssertionError((
-					"Number of keys {0}; "
-					"number of values {1}; "
-					"number of hashes {2}").format(
-						len(self._keys),
-						len(self._values),
-						len(self._hashes)))
-
-			if self._count / self._size >= self.MAX_DENSITY:
-				if self._size < 2**16:
-					self._resize(self._size * 4)
-				else:
-					self._resize(self._size * 2)
+				self._resize(self._size * 2)
 
 	def __delitem__(self, key):
 		act_idx = self._lookup(key)
@@ -336,8 +325,9 @@ class HopscotchDict(MutableMapping):
 		return self._count
 
 	def __repr__(self):
-		raise NotImplementedError()
+		return "{{{0}}}".format(", ".join([
+			"'{0}': {1}".format(repr(k), repr(v)) for k, v in izip(self._keys, self._values)]))
 
 	def __str__(self):
 		return "{{{0}}}".format(", ".join([
-			"'{0}': {1}".format(k, v) for k, v in izip(self._keys, self._values)]))
+			"'{0}': {1}".format(str(k), str(v)) for k, v in izip(self._keys, self._values)]))
