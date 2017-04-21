@@ -6,8 +6,6 @@ from collections import MutableMapping
 from itertools import izip
 from sys import maxint
 
-import pdb
-
 class HopscotchDict(MutableMapping):
 
 	# Python ints are signed, add one to get word length
@@ -54,11 +52,16 @@ class HopscotchDict(MutableMapping):
 			# move the pointer in the given index to the open index and update
 			# the given index's neighborhood
 			elif act_idx - idx < self._nbhd_size:
-#				pdb.set_trace()
+				# idx is the index to open up
+				# orig_idx is the index the key in self._indices[idx] is
+				# supposed to hash to
+				# act_idx is the open index
+				orig_idx = self._hashes[self._indices[idx]] % self._size
 				self._indices[act_idx] = self._indices[idx]
-				self._set_neighbor(idx, act_idx - idx)
+				self._set_neighbor(orig_idx, act_idx - orig_idx)
 				self._indices[idx] = self.FREE_ENTRY
 				self._clear_neighbor(idx, 0)
+				self._clear_neighbor(orig_idx, idx - orig_idx)
 				return
 
 			# The open index is too far away, so find the closest index to the
@@ -67,9 +70,19 @@ class HopscotchDict(MutableMapping):
 				for i in xrange(max(idx, act_idx - self._nbhd_size) + 1,
 								act_idx):
 
-					if not self.nbhds[i]:
+					# If the neighborhood is empty, there is no data that can
+					# be pushed out to open up space
+					if not self._nbhds[i]:
+
+						# If the last index before the open index has no
+						# neighbors, every index between the given index and
+						# the open index is filled with data displaced from
+						# other indices, and the invariant cannot be maintained
+						# without a resize
+
+						# TODO: make exception wording better
 						if i == act_idx - 1:
-							raise Exception()
+							raise Exception("Could not open index while maintaining invariant")
 						else:
 							continue
 
@@ -81,9 +94,6 @@ class HopscotchDict(MutableMapping):
 						self._clear_neighbor(i, hop_idx - i)
 						act_idx = hop_idx
 						break
-
-		# TODO: make exception wording better
-		raise Exception("Could not open index while maintaining invariant")
 
 	def _get_displaced_neighbors(self, idx):
 		neighbors = []
@@ -98,8 +108,6 @@ class HopscotchDict(MutableMapping):
 	def _lookup(self, key):
 		hashed = abs(hash(key))
 
-		# _get_displaced_neighbors gets all indices in _indices with keys that
-		# originally hashed to the given key
 		for idx in self._get_displaced_neighbors(hashed % self._size):
 			if self._indices[idx] < 0:
 				raise AssertionError((
@@ -113,11 +121,9 @@ class HopscotchDict(MutableMapping):
 		return None
 
 	def _resize(self, new_size):
+		# Dict size is a power of two to make modulo operations quicker
 		if new_size & new_size - 1:
 			raise AssertionError("New size for dict not a power of 2")
-
-		self._indices = self._make_indices(new_size)
-		self._size = new_size
 
 		# Neighborhoods must be at least as large as the base-2 logarithm of
 		# the dict size
@@ -132,9 +138,12 @@ class HopscotchDict(MutableMapping):
 			if self._nbhd_size * 2 > self.MAX_NBHD_SIZE:
 				raise AssertionError(
 					"Resizing requires neighborhood larger than machine word")
-
 			self._nbhd_size *= 2
+
 		self._nbhds = self._make_nbhds(self._nbhd_size, new_size)
+		self._indices = self._make_indices(new_size)
+		self._size = new_size
+
 
 		# This works b/c the order of hashes is the same as the order of keys
 		# and values
