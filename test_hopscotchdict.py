@@ -52,14 +52,18 @@ def test_clear_neighbor(out_of_bounds_neighbor):
 		assert hd._nbhds[idx] == 0
 
 
-@pytest.mark.parametrize("open_location", ["near", "far"],
-	ids = ["inside-neighborhood", "outside-neighborhood"])
-def test_valid_free_up(open_location):
+@pytest.mark.parametrize("scenario", ["near", "far", "last_none", "last_distant"],
+	ids = ["inside-neighborhood", "outside-neighborhood",
+		   "last-index-no-neighbors", "last-index-distant-neighbors"])
+def test_valid_free_up(scenario):
 	hd = HopscotchDict()
 
-	if open_location == "near":
+	if scenario == "last_none" or scenario == "last_distant":
+		assert False
+
+	if scenario == "near":
 		end_index = 6
-	elif open_location == "far":
+	elif scenario == "far":
 		end_index = 11
 
 	for i in xrange(1, end_index):
@@ -73,7 +77,7 @@ def test_valid_free_up(open_location):
 	assert hd._indices[1] == hd.FREE_ENTRY
 	assert not hd._nbhds[1] & 1 << 7
 
-	if open_location == "near":
+	if scenario == "near":
 		# Make sure neighborhood knows where displaced entry is
 		assert hd._nbhds[1] & 1 << 2
 
@@ -81,7 +85,7 @@ def test_valid_free_up(open_location):
 		assert hd._indices[6] == 0
 		assert not hd._nbhds[6] & 1 << 7
 
-	elif open_location == "far":
+	elif scenario == "far":
 		# Make sure neighborhood knows where displaced entry is
 		assert hd._nbhds[1] & 1 << 4
 
@@ -290,8 +294,13 @@ def test_setitem(scenario):
 	hd = HopscotchDict()
 
 	if scenario == "insert":
-		hd["test_setitem"] = True
-		assert hd["test_setitem"]
+		for i in sample(xrange(10000), 1000):
+			hd["test_setitem_{}".format(i)] = i
+
+		assert len(hd) == 1000
+		for key in hd._keys:
+			i = int(key.split("_")[-1])
+			assert hd["test_setitem_{}".format(i)] == i
 
 	elif scenario == "overwrite":
 		hd["test_setitem"] = False
@@ -391,39 +400,109 @@ def test_contains(valid_key):
 	assert ("test_contains" in hd) == valid_key
 
 
-def test_iter():
+def test_iter_and_len():
 	hd = HopscotchDict()
 
 	count = 0
 	limit = randint(1, 10000)
-	for i in xrange(limit):
+	for i in sample(xrange(10000), limit):
 		hd["test_iter_{}".format(i)] = i
 
 	for key in hd:
 		count += 1
 
-	assert count == limit
-
-
-def test_len():
-	hd = HopscotchDict()
-
-	count = randint(1, 10000)
-
-	for i in xrange(count):
-		hd["test_len_{}".format(i)] = i
-
-	assert len(hd) == count
+	assert count == limit == len(hd)
 
 
 def test_repr():
+	for r in xrange(100):
+		hd = HopscotchDict()
+
+		for i in sample(xrange(10000), 100):
+			hd["test_repr_{}".format(i)] = i
+
+		for key in hd._keys:
+			if key not in hd:
+				import pdb
+				pdb.set_trace()
+
+		assert eval(repr(hd)) == hd
+
+
+@pytest.mark.parametrize("scenario",
+	["eq", "bad_type", "bad_len", "bad_keys", "bad_vals"],
+	ids = ["equal", "type-mismatch", "length-mismatch",
+		   "key-mismatch", "value-mismatch"])
+def test_eq_and_neq(scenario):
+	hd = HopscotchDict()
+	dc = {}
+
+	for i in xrange(5):
+		hd["test_eq_and_neq_{}".format(i)] = i
+		dc["test_eq_and_neq_{}".format(i)] = i
+
+	if (scenario == "bad_len"
+		or scenario == "bad_keys"):
+			dc.pop("test_eq_and_neq_4")
+
+	if scenario == "bad_keys":
+		dc["test_eq_and_neq_5"] = 4
+
+	if scenario == "bad_vals":
+		dc["test_eq_and_neq_0"] = False
+
+	if scenario == "bad_type":
+		assert hd != dc.items()
+
+	elif scenario != "eq":
+		assert hd != dc
+
+	else:
+		assert hd == dc
+
+
+def test_items_and_iteritems():
 	hd = HopscotchDict()
 
 	for i in sample(xrange(10000), 100):
-		hd["test_repr_{}".format(i)] = i
+		hd["test_items_and_iteritems_{}".format(i)] = i
 
-	assert eval(repr(hd)) == hd
+	items = hd.items()
+	for item in hd.iteritems():
+		assert item in items
 
 
-def test_eq_and_neq():
-	assert False
+def test_keys_and_iterkeys():
+	hd = HopscotchDict()
+
+	for i in sample(xrange(10000), 100):
+		hd["test_keys_and_iterkeys_{}".format(i)] = i
+
+	keys = hd.keys()
+	for key in hd.iterkeys():
+		assert key in keys
+
+
+def test_values_and_itervalues():
+	hd = HopscotchDict()
+
+	for i in sample(xrange(10000), 100):
+		hd["test_values_and_itervalues_{}".format(i)] = i
+
+	vals = hd.values()
+	for val in hd.itervalues():
+		assert val in vals
+
+
+def test_reversed():
+	hd = HopscotchDict()
+
+	for i in sample(xrange(10000), 100):
+		hd["test_reversed_{}".format(i)] = i
+
+	keys = hd.keys()
+	rev_keys = list(reversed(hd))
+
+	assert len(keys) == len(rev_keys)
+	for i in xrange(len(keys)):
+		assert keys[i] == rev_keys[len(keys) - i - 1]

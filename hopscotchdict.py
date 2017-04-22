@@ -1,4 +1,4 @@
-#keys(), values(), items(), has_key(), get(), setdefault(), iterkeys(), itervalues(), iteritems(), pop(), popitem(), copy(), and update()
+#has_key(), get(), setdefault(), pop(), popitem(), copy(), and update()
 
 from __future__ import division
 from array import array
@@ -42,8 +42,9 @@ class HopscotchDict(MutableMapping):
 
 	def _free_up(self, idx):
 		act_idx = idx
-
+		indices = set()
 		while act_idx < self._size:
+
 			if self._indices[act_idx] != self.FREE_ENTRY:
 				act_idx += 1
 				continue
@@ -69,23 +70,20 @@ class HopscotchDict(MutableMapping):
 			else:
 				for i in xrange(max(idx, act_idx - self._nbhd_size) + 1, act_idx):
 
-					# If the neighborhood is empty, there is no data that can
-					# be pushed out to open up space
-					if not self._nbhds[i]:
+					# If the last index before the open index has no displaced
+					# neighbors or its closest one is after the open index,
+					# every index between the given index and the open index is
+					# filled with data displaced from other indices, and the
+					# invariant cannot be maintained without a resize
+					if i == act_idx - 1:
+						if (not self._nbhds[i]
+							or min(self._get_displaced_neighbors(i)) > act_idx):
+								raise Exception((
+										"No space available before open index"))
 
-						# If the last index before the open index has no
-						# neighbors, every index between the given index and
-						# the open index is filled with data displaced from
-						# other indices, and the invariant cannot be maintained
-						# without a resize
-
-						# TODO: make exception wording better
-						if i == act_idx - 1:
-							raise Exception("Could not open index while maintaining invariant")
-						else:
-							continue
-
-					else:
+					# If the index has displaced neighbors and one is before the open
+					# index, move the data in the neighbor into the open index
+					if self._nbhds[i]:
 						hop_idx = min(self._get_displaced_neighbors(i))
 						if hop_idx < act_idx:
 							self._indices[act_idx] = self._indices[hop_idx]
@@ -93,7 +91,13 @@ class HopscotchDict(MutableMapping):
 							self._set_neighbor(i, act_idx - i)
 							self._clear_neighbor(i, hop_idx - i)
 							act_idx = hop_idx
+							indices.clear()
 							break
+					else:
+						continue
+
+		# No open indices exist between the given index and the end of the array
+		raise Exception("Could not open index while maintaining invariant")
 
 	def _get_displaced_neighbors(self, idx):
 		neighbors = []
@@ -160,17 +164,18 @@ class HopscotchDict(MutableMapping):
 				self._indices[exp_idx] = data_idx
 				self._set_neighbor(exp_idx, 0)
 			else:
-				for act_idx in xrange(exp_idx + 1, exp_idx + self._nbhd_size):
+				try:
+					self._free_up(exp_idx)
 
-					# Foregoing the vanishingly small edge case where an index's
-					# neighborhood fills up during resizing, requiring another
-					# resize
-					if self._indices[act_idx] != self.FREE_ENTRY:
-						continue
-					else:
-						self._indices[act_idx] = data_idx
-						self._set_neighbor(exp_idx, act_idx - exp_idx)
-						break
+				# If an index's neighborhood fills up during resizing, abandon
+				# the current effort and resize to a bigger size
+				except Exception:
+					self._resize(self._size * 2)
+					return
+				else:
+					self._indices[exp_idx] = data_idx
+					self._set_neighbor(exp_idx, 0)
+
 
 	def _set_neighbor(self, idx, nbhd_idx):
 		if nbhd_idx >= self._nbhd_size:
@@ -179,7 +184,6 @@ class HopscotchDict(MutableMapping):
 		self._nbhds[idx] |= (1 << self._nbhd_size - nbhd_idx - 1)
 
 	def clear(self):
-
 		# The total size of main dict, including empty spaces
 		self._size = 8
 
@@ -205,6 +209,27 @@ class HopscotchDict(MutableMapping):
 
 		# The main table, used to map keys to values
 		self._indices = self._make_indices(self._size)
+
+	def has_key(self, key):
+		return self.__contains__(key)
+
+	def items(self):
+		return zip(self._keys, self._values)
+
+	def iteritems(self):
+		return izip(self._keys, self._values)
+
+	def iterkeys(self):
+		return self.__iter__()
+
+	def itervalues(self):
+		return iter(self._values)
+
+	def keys(self):
+		return self._keys
+
+	def values(self):
+		return self._values
 
 	def __init__(self, *args, **kwargs):
 
@@ -284,6 +309,7 @@ class HopscotchDict(MutableMapping):
 			else:
 				self._resize(self._size * 2)
 
+
 	def __delitem__(self, key):
 		act_idx = self._lookup(key)
 		exp_idx = abs(hash(key)) % self._size
@@ -329,13 +355,27 @@ class HopscotchDict(MutableMapping):
 			raise KeyError(key)
 
 	def __contains__(self, key):
-		if self._lookup(key):
+		if isinstance(self._lookup(key), int):
 			return True
 		else:
 			return False
 
 	def __eq__(self, other):
-		raise NotImplementedError()
+		if not isinstance(other, MutableMapping):
+			return False
+
+		if len(self) != len(other):
+			return False
+
+		all_keys = set(self._keys).union(other.keys())
+		if len(all_keys) != len(self):
+			return False
+
+		for key in all_keys:
+			if (type(self[key]) != type(other[key])
+				or self[key] != other[key]):
+					return False
+		return True
 
 	def __iter__(self):
 		return iter(self._keys)
@@ -344,14 +384,14 @@ class HopscotchDict(MutableMapping):
 		return self._count
 
 	def __neq__(self, other):
-		raise NotImplementedError()
+		return not self.__eq__(other)
 
 	def __repr__(self):
-		raise NotImplementedError()
+		return "HopscotchDict({0})".format(self.items())
 
 	def __reversed__(self):
-		raise NotImplementedError()
+		return reversed(self._keys)
 
 	def __str__(self):
-		return "{{{0}}}".format(", ".join([
-			"'{0}': {1}".format(str(k), str(v)) for k, v in izip(self._keys, self._values)]))
+		return "{{{0}}}".format(
+			", ".join("'{0!s}': {1!s}".format(*i) for i in self.iteritems()))
