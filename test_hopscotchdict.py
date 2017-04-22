@@ -2,6 +2,8 @@ import pytest
 
 from hopscotchdict import HopscotchDict
 
+from random import randint, sample
+
 @pytest.mark.parametrize("log_array_size", [4, 8, 16],
 	ids = ["small-array", "medium-array", "large-array"])
 def test_make_indices(log_array_size):
@@ -34,36 +36,20 @@ def test_make_nbhds(nbhd_size):
 
 	nbhds[0] = 2 ** nbhd_size - 1
 
-
-def test_clear_neighbor():
+@pytest.mark.parametrize("out_of_bounds_neighbor", [True, False],
+	ids = ["outside-neighborhood", "inside-neighborhood"])
+def test_clear_neighbor(out_of_bounds_neighbor):
 	hd = HopscotchDict()
 	hd["test_clear_neighbor"] = True
 	idx = hd._lookup("test_clear_neighbor")
 
-	assert hd._nbhds[idx] != 0
-	hd._clear_neighbor(idx, 0)
-	assert hd._nbhds[idx] == 0
-
-
-@pytest.mark.parametrize("creation_args", ["none", "list", "dict"],
-	ids = ["no-creation-args", "creation-list", "creation-dict"])
-def test_dict_creation(creation_args):
-	keys = ("test_key_1", "test_key_2", "test_key_3", "test_key_4", "test_key_5")
-	vals = (1, 2, 3, 4, 5)
-
-	if creation_args == "none":
-		hd = HopscotchDict()
-	if creation_args == "list":
-		hd = HopscotchDict(zip(keys, vals))
-	if creation_args == "dict":
-		hd = HopscotchDict(dict(zip(keys, vals)))
-
-	assert hd._size == 8
-
-	if creation_args == "none":
-		assert len(hd) == 0
+	if out_of_bounds_neighbor:
+		with pytest.raises(ValueError):
+			hd._clear_neighbor(idx, 8)
 	else:
-		assert len(hd) == 5
+		assert hd._nbhds[idx] != 0
+		hd._clear_neighbor(idx, 0)
+		assert hd._nbhds[idx] == 0
 
 
 @pytest.mark.parametrize("open_location", ["near", "far"],
@@ -77,7 +63,7 @@ def test_valid_free_up(open_location):
 		end_index = 11
 
 	for i in xrange(1, end_index):
-		hd[i] = "test_{}".format(i)
+		hd[i] = "test_valid_free_up_{}".format(i)
 
 	# Freeing up inside neighborhood: move to index 6
 	# Freeing up outside neighborhood: move to index 4, 4 moves to 11
@@ -114,10 +100,12 @@ def test_valid_free_up(open_location):
 
 def test_invalid_free_up():
 	hd = HopscotchDict()
-	hd._resize(16)
 
-	for i in xrange(1, 129, 16):
-		hd[i] = "test_{}".format(i)
+	for i in xrange(10, 17):
+		hd[i] = "test_invalid_free_up_{}".format(i)
+
+	for i in xrange(1, 257, 32):
+		hd[i] = "test_invalid_free_up_{}".format(i)
 
 	assert hd._nbhds[1] == 255
 
@@ -131,47 +119,54 @@ def test_get_displaced_neighbors(with_collisions):
 	hd = HopscotchDict()
 
 	if with_collisions:
-		hd[1] = "test_1"
-		hd[9] = "test_9"
-		hd[17] = "test_17"
-		hd[3] = "test_3"
-		hd[6] = "test_6"
-		hd[14] = "test_14"
+		hd[1] = "test_get_displaced_neighbors_1"
+		hd[9] = "test_get_displaced_neighbors_9"
+		hd[17] = "test_get_displaced_neighbors_17"
+		hd[3] = "test_get_displaced_neighbors_3"
+		hd[6] = "test_get_displaced_neighbors_6"
+		hd[14] = "test_get_displaced_neighbors_14"
 
 		assert hd._size == 8
 
-		assert sorted(hd._get_displaced_neighbors(1)) == [1, 2, 4]
+		assert hd._get_displaced_neighbors(1) == [1, 2, 4]
 		assert hd._get_displaced_neighbors(3) == [3]
-		assert sorted(hd._get_displaced_neighbors(6)) == [6, 7]
+		assert hd._get_displaced_neighbors(6) == [6, 7]
 
 	else:
 		for i in xrange(6):
-			hd[i] = "test_{}".format(i)
+			hd[i] = "test_get_displaced_neighbors_{}".format(i)
 
 		for i in xrange(6):
 			assert hd._get_displaced_neighbors(i) == [i]
 
 
-@pytest.mark.parametrize("scenario", ["missing", "found", "error"],
-	ids = ["missing-key", "found-key", "lookup-error"])
+@pytest.mark.parametrize("scenario", ["missing", "found", "displaced", "error"],
+	ids = ["missing-key", "found-key", "displaced-key", "lookup-error"])
 def test_lookup(scenario):
 	hd = HopscotchDict()
 
 	if scenario == "missing":
-		assert hd._lookup("test") == None
+		assert hd._lookup("test_lookup") == None
 
 	elif scenario == "found":
-		idx = abs(hash("test")) % hd._size
-		hd["test"] = True
-		assert hd._lookup("test") == idx
+		idx = abs(hash("test_lookup")) % hd._size
+		hd["test_lookup"] = True
+		assert hd._lookup("test_lookup") == idx
+
+	elif scenario == "displaced":
+		idx = abs(hash("test_lookup_1")) % hd._size
+		hd["test_lookup_1"] = True
+		hd["test_lookup_9"] = True
+		assert hd._lookup("test_lookup_1") == idx + 1
 
 	elif scenario == "error":
-		idx = abs(hash("test")) % hd._size
-		hd["test"] = True
+		idx = abs(hash("test_lookup")) % hd._size
+		hd["test_lookup"] = True
 		hd._set_neighbor(idx, (idx - 1) % hd._size)
+		hd._set_neighbor(idx, (idx + 1) % hd._size)
 
 		with pytest.raises(AssertionError):
-			hd._lookup("test")
+			hd._lookup("test_lookup")
 
 
 @pytest.mark.parametrize("scenario",
@@ -186,21 +181,19 @@ def test_resize(scenario):
 			hd._resize(25)
 
 	elif scenario == "too_large":
-		hd._nbhd_size = 64
-		hd._resize(8)
 		with pytest.raises(AssertionError):
 			hd._resize(2 ** 65)
 
 	elif scenario == "nbhd_inc":
 		for i in xrange(32):
-			hd["test_{}".format(i)] = i
+			hd["test_resize_{}".format(i)] = i
 
 		hd._resize(512)
 
 		assert hd._nbhd_size == 16
 
 		for i in xrange(32):
-			assert hd["test_{}".format(i)] == i
+			assert hd["test_resize_{}".format(i)] == i
 
 	elif scenario == "rsz_col":
 		hd[1] = "test_1"
@@ -210,3 +203,227 @@ def test_resize(scenario):
 
 		assert hd[1] == "test_1"
 		assert hd[17] == "test_17"
+
+
+@pytest.mark.parametrize("out_of_bounds_neighbor", [True, False],
+	ids = ["outside-neighborhood", "inside-neighborhood"])
+def test_set_neighbor(out_of_bounds_neighbor):
+	hd = HopscotchDict()
+	hd["test_set_neighbor"] = True
+	idx = hd._lookup("test_set_neighbor")
+
+	if out_of_bounds_neighbor:
+		with pytest.raises(ValueError):
+			hd._set_neighbor(idx, 8)
+	else:
+		assert hd._nbhds[idx] != 255
+
+		for i in xrange(8):
+			hd._set_neighbor(idx, i)
+
+		assert hd._nbhds[idx] == 255
+
+
+def test_clear():
+	hd = HopscotchDict()
+
+	for i in xrange(256):
+		hd["test_clear_{}".format(i)] = i
+
+	hd.clear()
+
+	assert hd._count == 0
+	assert hd._size == 8
+	assert hd._nbhd_size == 8
+
+	assert not hd._keys
+	assert not hd._values
+	assert not hd._hashes
+
+	assert len(hd._indices) == 8
+	assert len(set(hd._indices)) == 1
+
+	assert len(hd._nbhds) == 8
+	assert len(set(hd._nbhds)) == 1
+
+
+@pytest.mark.parametrize("creation_args", ["none", "list", "dict"],
+	ids = ["no-creation-args", "creation-list", "creation-dict"])
+def test_init(creation_args):
+	keys = ("test_key_1", "test_key_2", "test_key_3", "test_key_4", "test_key_5")
+	vals = (1, 2, 3, 4, 5)
+
+	if creation_args == "none":
+		hd = HopscotchDict()
+	if creation_args == "list":
+		hd = HopscotchDict(zip(keys, vals))
+	if creation_args == "dict":
+		hd = HopscotchDict(dict(zip(keys, vals)))
+
+	assert hd._size == 8
+
+	if creation_args == "none":
+		assert len(hd) == 0
+	else:
+		assert len(hd) == 5
+
+
+@pytest.mark.parametrize("valid_key", [True, False],
+	ids = ["valid-key", "invalid-key"])
+def test_getitem(valid_key):
+	hd = HopscotchDict()
+
+	if valid_key:
+		hd["test_getitem"] = True
+		assert hd["test_getitem"]
+	else:
+		with pytest.raises(KeyError):
+			assert hd["test_getitem"]
+
+
+@pytest.mark.parametrize("scenario",
+	["insert", "overwrite", "density_resize", "snr", "bnr", "ovw_err", "ins_err",
+	 "lkp_err"],
+	ids = ["insert", "overwrite", "density-resize", "small-nbhd-resize",
+		   "big-nbhd-resize", "overwrite-error", "insert-error", "lookup-error"])
+def test_setitem(scenario):
+	hd = HopscotchDict()
+
+	if scenario == "insert":
+		hd["test_setitem"] = True
+		assert hd["test_setitem"]
+
+	elif scenario == "overwrite":
+		hd["test_setitem"] = False
+		hd["test_setitem"] = True
+		assert len(hd) == 1
+		assert hd["test_setitem"]
+
+	elif scenario == "density_resize":
+		import pdb
+		for i in xrange(105000):
+			hd["test_setitem_{}".format(i)] = i
+
+		for i in xrange(105000):
+			assert hd["test_setitem_{}".format(i)] == i
+
+	elif scenario == "ovw_err" or scenario == "ins_err":
+		if scenario == "ovw_err":
+			hd["test_setitem"] = False
+		hd["test"] = True
+		hd._values.pop()
+
+		with pytest.raises(AssertionError):
+			hd["test_setitem"] = True
+
+	elif scenario == "lkp_err":
+		idx = abs(hash("test_setitem")) % hd._size
+		hd["test_setitem"] = False
+		hd._indices[idx] = hd.FREE_ENTRY
+
+		with pytest.raises(AssertionError):
+			hd["test_setitem"] = True
+
+	elif scenario == "snr":
+		for i in xrange(10, 17):
+			hd[i] = "test_setitem_{}".format(i)
+
+		assert hd._size == 32
+
+		for i in xrange(1, 257, 32):
+			hd[i] = "test_setitem_{}".format(i)
+
+		hd[257] = "test_setitem_257"
+
+		assert len(hd) == 16
+		assert hd._size == 128
+
+		for i in hd._keys:
+			assert hd[i] == "test_setitem_{}".format(i)
+
+	elif scenario == "bnr":
+		for i in xrange(26250):
+			hd[i] = "test_setitem_{}".format(i)
+
+		assert hd._size == 2 ** 17
+
+		for i in xrange(30001, 30001 + 32 * 2 ** 17, 2 ** 17):
+			hd[i] = "test_setitem_{}".format(i)
+
+		assert len(hd) == 26282
+
+		hd[4224305] = "test_setitem_4224305"
+
+		assert len(hd) == 26283
+		assert hd._size == 2 ** 18
+
+		for i in hd._keys:
+			assert hd[i] == "test_setitem_{}".format(i)
+
+
+@pytest.mark.parametrize("scenario", ["found", "missing"],
+	ids = ["found-key", "missing-key"])
+def test_delitem(scenario):
+	hd = HopscotchDict()
+	idx = abs(hash("test_delitem")) % hd._size
+
+	if scenario == "found":
+		hd["test_delitem"] = True
+		assert len(hd) == 1
+
+		del hd["test_delitem"]
+		assert len(hd) == 0
+		assert hd._indices[idx] == hd.FREE_ENTRY
+
+	elif scenario == "missing":
+		with pytest.raises(KeyError):
+			del hd["test_delitem"]
+
+
+@pytest.mark.parametrize("valid_key", [True, False],
+	ids = ["valid-key", "invalid-key"])
+def test_contains(valid_key):
+	hd = HopscotchDict()
+
+	if valid_key:
+		hd["test_contains"] = True
+
+	assert ("test_contains" in hd) == valid_key
+
+
+def test_iter():
+	hd = HopscotchDict()
+
+	count = 0
+	limit = randint(1, 10000)
+	for i in xrange(limit):
+		hd["test_iter_{}".format(i)] = i
+
+	for key in hd:
+		count += 1
+
+	assert count == limit
+
+
+def test_len():
+	hd = HopscotchDict()
+
+	count = randint(1, 10000)
+
+	for i in xrange(count):
+		hd["test_len_{}".format(i)] = i
+
+	assert len(hd) == count
+
+
+def test_repr():
+	hd = HopscotchDict()
+
+	for i in sample(xrange(10000), 100):
+		hd["test_repr_{}".format(i)] = i
+
+	assert eval(repr(hd)) == hd
+
+
+def test_eq_and_neq():
+	assert False
