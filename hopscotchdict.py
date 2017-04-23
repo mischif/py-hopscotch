@@ -403,7 +403,7 @@ class HopscotchDict(MutableMapping):
 			raise KeyError(key)
 
 	def __contains__(self, key):
-		if isinstance(self._lookup(key), int):
+		if self._lookup(key) is not None:
 			return True
 		else:
 			return False
@@ -431,7 +431,7 @@ class HopscotchDict(MutableMapping):
 	def __len__(self):
 		return self._count
 
-	def __neq__(self, other):
+	def __ne__(self, other):
 		return not self.__eq__(other)
 
 	def __repr__(self):
