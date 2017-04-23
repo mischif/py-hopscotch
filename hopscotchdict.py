@@ -2,20 +2,20 @@ from __future__ import division
 from array import array
 from copy import copy
 from collections import MutableMapping
-from sys import maxint
+from sys import maxsize
 
 # Import the backported version of zip that acts like izip
+# Will fail for < 2.6 (which isn't supported)
+# and > 3.0 (where it's built in)
 try:
 	from future_builtins import zip
-# 3.x doesn't have future_builtins
-# (neither does < 2.6 but those versions aren't supported)
 except ImportError:
 	pass
 
 class HopscotchDict(MutableMapping):
 
 	# Python ints are signed, add one to get word length
-	MAX_NBHD_SIZE = maxint.bit_length() + 1
+	MAX_NBHD_SIZE = maxsize.bit_length() + 1
 
 	# Only allow neighborhood sizes that match word lengths
 	ALLOWED_NBHD_SIZES = {8, 16, 32, 64}
