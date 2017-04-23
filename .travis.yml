@@ -1,5 +1,7 @@
 language: python
 
+sudo: false
+
 python:
     - "2.7"
     - "3.3"
@@ -9,6 +11,9 @@ python:
     - "pypy"
     - "pypy3"
 
-install: true
+install: "pip install pytest-cov"
 
-script: py.test
+script: py.test --cov=./
+
+after_success:
+    - bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
