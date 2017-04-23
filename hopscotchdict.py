@@ -1,9 +1,8 @@
-#has_key(), get(), setdefault(), pop(), popitem(), copy(), and update()
-
 from __future__ import division
 from array import array
+from copy import copy
 from collections import MutableMapping
-from itertools import izip
+from itertools import chain, izip
 from sys import maxint
 
 class HopscotchDict(MutableMapping):
@@ -42,7 +41,6 @@ class HopscotchDict(MutableMapping):
 
 	def _free_up(self, idx):
 		act_idx = idx
-		indices = set()
 		while act_idx < self._size:
 
 			if self._indices[act_idx] != self.FREE_ENTRY:
@@ -91,7 +89,6 @@ class HopscotchDict(MutableMapping):
 							self._set_neighbor(i, act_idx - i)
 							self._clear_neighbor(i, hop_idx - i)
 							act_idx = hop_idx
-							indices.clear()
 							break
 					else:
 						continue
@@ -210,6 +207,22 @@ class HopscotchDict(MutableMapping):
 		# The main table, used to map keys to values
 		self._indices = self._make_indices(self._size)
 
+	def copy(self):
+		out = HopscotchDict()
+
+		for key in self._keys:
+			out[key] = copy(self.__getitem__(key))
+
+		return out
+
+	def get(self, key, default=None):
+		out = default
+		try:
+			out = self.__getitem__(key)
+		except KeyError:
+			pass
+		return out
+
 	def has_key(self, key):
 		return self.__contains__(key)
 
@@ -227,6 +240,34 @@ class HopscotchDict(MutableMapping):
 
 	def keys(self):
 		return self._keys
+
+	def pop(self, key, default=None):
+		out = default
+
+		try:
+			out = self.__getitem__(key)
+		except KeyError:
+			if default is None:
+				raise
+		else:
+			self.__delitem__(key)
+
+		return out
+
+	def popitem(self):
+		if not len(self):
+			raise KeyError
+		else:
+			key = self._keys[-1]
+			val = self.pop(self._keys[-1])
+			return (key, val)
+
+	def setdefault(self, key, default=None):
+		try:
+			return self.__getitem__(key)
+		except KeyError:
+			self.__setitem__(key, default)
+			return default
 
 	def values(self):
 		return self._values
@@ -387,7 +428,7 @@ class HopscotchDict(MutableMapping):
 		return not self.__eq__(other)
 
 	def __repr__(self):
-		return "HopscotchDict({0})".format(self.items())
+		return "HopscotchDict({0!r})".format(self.items())
 
 	def __reversed__(self):
 		return reversed(self._keys)

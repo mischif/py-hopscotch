@@ -52,14 +52,10 @@ def test_clear_neighbor(out_of_bounds_neighbor):
 		assert hd._nbhds[idx] == 0
 
 
-@pytest.mark.parametrize("scenario", ["near", "far", "last_none", "last_distant"],
-	ids = ["inside-neighborhood", "outside-neighborhood",
-		   "last-index-no-neighbors", "last-index-distant-neighbors"])
+@pytest.mark.parametrize("scenario", ["near", "far"],
+	ids = ["inside-neighborhood", "outside-neighborhood"])
 def test_valid_free_up(scenario):
 	hd = HopscotchDict()
-
-	if scenario == "last_none" or scenario == "last_distant":
-		assert False
 
 	if scenario == "near":
 		end_index = 6
@@ -101,21 +97,40 @@ def test_valid_free_up(scenario):
 		assert not hd._nbhds[11] & 1 << 7
 		assert not hd._nbhds[11] & 1
 
-
-def test_invalid_free_up():
+@pytest.mark.parametrize("scenario", ["no_space", "last_none", "last_distant"],
+	ids = ["no_space", "last-index-no-neighbors", "last-index-distant-neighbors"])
+def test_invalid_free_up(scenario):
 	hd = HopscotchDict()
 
-	for i in xrange(10, 17):
-		hd[i] = "test_invalid_free_up_{}".format(i)
+	if scenario == "no_space":
+		for i in xrange(2, 8):
+			hd[i] = "test_invalid_free_up_{}".format(i)
 
-	for i in xrange(1, 257, 32):
-		hd[i] = "test_invalid_free_up_{}".format(i)
+		with pytest.raises(Exception):
+			hd._free_up(2)
 
-	assert hd._nbhds[1] == 255
+	elif scenario == "last_none":
+		for i in xrange(1, 257, 32):
+			hd[i] = "test_invalid_free_up_{}".format(i)
 
-	with pytest.raises(Exception):
-		hd._free_up(1)
+		with pytest.raises(Exception):
+			hd._free_up(1)
 
+	elif scenario == "last_distant":
+		hd._resize(32)
+
+		hd[8] = "test_invalid_free_up_8"
+		hd[9] = "test_invalid_free_up_9"
+		hd[40] = "test_invalid_free_up_40"
+
+		del hd[40]
+		del hd[9]
+
+		for i in xrange(1, 257, 32):
+			hd[i] = "test_invalid_free_up_{}".format(i)
+
+		with pytest.raises(Exception):
+			hd._free_up(1)
 
 @pytest.mark.parametrize("with_collisions", [True, False],
 	ids = ["with-collisions", "no-collisions"])
@@ -394,10 +409,14 @@ def test_delitem(scenario):
 def test_contains(valid_key):
 	hd = HopscotchDict()
 
-	if valid_key:
-		hd["test_contains"] = True
+	for i in sample(xrange(10000), 1000):
+		hd["test_contains_{}".format(i)] = i
 
-	assert ("test_contains" in hd) == valid_key
+	for key in hd._keys:
+		assert key in hd
+
+	if not valid_key:
+		assert "test_contains" not in hd
 
 
 def test_iter_and_len():
@@ -415,18 +434,12 @@ def test_iter_and_len():
 
 
 def test_repr():
-	for r in xrange(100):
-		hd = HopscotchDict()
+	hd = HopscotchDict()
 
-		for i in sample(xrange(10000), 100):
-			hd["test_repr_{}".format(i)] = i
+	for i in sample(xrange(10000), 100):
+		hd["test_repr_{}".format(i)] = i
 
-		for key in hd._keys:
-			if key not in hd:
-				import pdb
-				pdb.set_trace()
-
-		assert eval(repr(hd)) == hd
+	assert eval(repr(hd)) == hd
 
 
 @pytest.mark.parametrize("scenario",
@@ -506,3 +519,73 @@ def test_reversed():
 	assert len(keys) == len(rev_keys)
 	for i in xrange(len(keys)):
 		assert keys[i] == rev_keys[len(keys) - i - 1]
+
+@pytest.mark.parametrize("valid_key", [True, False],
+	ids = ["stored-value", "default-value"])
+def test_get(valid_key):
+	hd = HopscotchDict()
+	val = None
+
+	if valid_key:
+		hd["test_get"] = val = 1337
+	else:
+		val = 1017
+
+	assert hd.get("test_get", 1017) == val
+
+
+@pytest.mark.parametrize("scenario", ["valid_key", "invalid_key", "default"],
+	ids = ["valid-key", "invalid-key", "default-value"])
+def test_pop(scenario):
+	hd = HopscotchDict()
+	val = None
+
+	if scenario == "valid_key":
+		hd["test_pop"] = val = 1337
+	else:
+		val = 0
+
+	if scenario != "invalid_key":
+		assert hd.pop("test_pop", 0) == val
+	else:
+		with pytest.raises(KeyError):
+			hd.pop("test_pop")
+
+def test_popitem():
+	hd = HopscotchDict()
+
+	for i in sample(xrange(10000), 100):
+		hd["test_popitem_{}".format(i)] = i
+
+	key = hd._keys[-1]
+	val = hd._values[-1]
+
+	assert len(hd) == 100
+	assert (key, val) == hd.popitem()
+	assert len(hd) == 99
+	assert key not in hd
+
+@pytest.mark.parametrize("existing_key", [True, False],
+	ids = ["no-use-default", "use-default"])
+def test_setdefault(existing_key):
+	hd = HopscotchDict()
+	val = None
+
+	if existing_key:
+		hd["test_setdefault"] = val = 1337
+	else:
+		val = 1017
+
+	assert hd.setdefault("test_setdefault", 1017) == val
+
+
+def test_copy():
+	hd = HopscotchDict()
+
+	for i in sample(xrange(10000), 100):
+		hd["test_copy_{}".format(i)] = i
+
+	hdc = hd.copy()
+
+	for key in hd._keys:
+		assert id(hd[key]) == id(hdc[key])
