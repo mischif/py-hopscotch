@@ -168,15 +168,13 @@ class HopscotchDict(MutableMapping):
 				self._indices[exp_idx] = data_idx
 				self._set_neighbor(exp_idx, 0)
 			else:
-				try:
+					# _resize was called either because the dict was too dense or an
+					# item could not be added w/o violating an invariant; in the
+					# first case all invariants will still hold with even more space
+					# so the call to _free_op will succeed; in the second case the item
+					# that triggered this resize has not yet been added to the dict and
+					# thus is equivalent the first case and the call will again succeed
 					self._free_up(exp_idx)
-
-				# If an index's neighborhood fills up during resizing, abandon
-				# the current effort and resize to a bigger size
-				except Exception:
-					self._resize(self._size * 2)
-					return
-				else:
 					self._indices[exp_idx] = data_idx
 					self._set_neighbor(exp_idx, 0)
 

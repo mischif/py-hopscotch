@@ -322,11 +322,15 @@ def test_setitem(scenario):
 		assert hd["test_setitem"]
 
 	elif scenario == "density_resize":
-		for i in range(105000):
-			hd["test_setitem_{}".format(i)] = i
+		hd._resize(2 ** 16)
 
-		for i in range(105000):
-			assert hd["test_setitem_{}".format(i)] == i
+		for i in range(55000):
+			hd[i] = i
+
+		assert hd._size == 2 ** 17
+		assert len(hd) == 55000
+		for i in range(55000):
+			assert hd[i] == i
 
 	elif scenario == "ovw_err" or scenario == "ins_err":
 		if scenario == "ovw_err":
@@ -410,7 +414,7 @@ def test_delitem(scenario):
 
 @pytest.mark.parametrize("valid_key", [True, False],
 	ids = ["valid-key", "invalid-key"])
-def test_contains(valid_key):
+def test_contains_and_has_key(valid_key):
 	hd = HopscotchDict()
 
 	for i in sample(range(10000), 1000):
@@ -421,7 +425,7 @@ def test_contains(valid_key):
 
 	if not valid_key:
 		assert "test_contains" not in hd
-
+		assert not hd.has_key("test_contains")
 
 def test_iter_and_len():
 	hd = HopscotchDict()
@@ -555,19 +559,25 @@ def test_pop(scenario):
 		with pytest.raises(KeyError):
 			hd.pop("test_pop")
 
-def test_popitem():
+@pytest.mark.parametrize("empty_dict", [True, False],
+	ids = ["empty-dict", "nonempty-dict"])
+def test_popitem(empty_dict):
 	hd = HopscotchDict()
 
-	for i in sample(range(10000), 100):
-		hd["test_popitem_{}".format(i)] = i
+	if empty_dict:
+		with pytest.raises(KeyError):
+			hd.popitem()
+	else:
+		for i in sample(range(10000), 100):
+			hd["test_popitem_{}".format(i)] = i
 
-	key = hd._keys[-1]
-	val = hd._values[-1]
+		key = hd._keys[-1]
+		val = hd._values[-1]
 
-	assert len(hd) == 100
-	assert (key, val) == hd.popitem()
-	assert len(hd) == 99
-	assert key not in hd
+		assert len(hd) == 100
+		assert (key, val) == hd.popitem()
+		assert len(hd) == 99
+		assert key not in hd
 
 @pytest.mark.parametrize("existing_key", [True, False],
 	ids = ["no-use-default", "use-default"])
@@ -593,3 +603,12 @@ def test_copy():
 
 	for key in hd._keys:
 		assert id(hd[key]) == id(hdc[key])
+
+def test_str():
+	hd = HopscotchDict()
+	res = "{'test_str_0': 0, 'test_str_1': 1, 'test_str_2': 2, 'test_str_3': 3, 'test_str_4': 4}"
+
+	for i in range(5):
+		hd["test_str_{}".format(i)] = i
+
+	assert str(hd) == res
