@@ -62,7 +62,7 @@ def test_valid_free_up(scenario):
 	elif scenario == "far":
 		end_index = 11
 
-	for i in xrange(1, end_index):
+	for i in range(1, end_index):
 		hd[i] = "test_valid_free_up_{}".format(i)
 
 	# Freeing up inside neighborhood: move to index 6
@@ -103,14 +103,14 @@ def test_invalid_free_up(scenario):
 	hd = HopscotchDict()
 
 	if scenario == "no_space":
-		for i in xrange(2, 8):
+		for i in range(2, 8):
 			hd[i] = "test_invalid_free_up_{}".format(i)
 
 		with pytest.raises(Exception):
 			hd._free_up(2)
 
 	elif scenario == "last_none":
-		for i in xrange(1, 257, 32):
+		for i in range(1, 257, 32):
 			hd[i] = "test_invalid_free_up_{}".format(i)
 
 		with pytest.raises(Exception):
@@ -126,7 +126,7 @@ def test_invalid_free_up(scenario):
 		del hd[40]
 		del hd[9]
 
-		for i in xrange(1, 257, 32):
+		for i in range(1, 257, 32):
 			hd[i] = "test_invalid_free_up_{}".format(i)
 
 		with pytest.raises(Exception):
@@ -152,10 +152,10 @@ def test_get_displaced_neighbors(with_collisions):
 		assert hd._get_displaced_neighbors(6) == [6, 7]
 
 	else:
-		for i in xrange(6):
+		for i in range(6):
 			hd[i] = "test_get_displaced_neighbors_{}".format(i)
 
-		for i in xrange(6):
+		for i in range(6):
 			assert hd._get_displaced_neighbors(i) == [i]
 
 
@@ -204,14 +204,14 @@ def test_resize(scenario):
 			hd._resize(2 ** 65)
 
 	elif scenario == "nbhd_inc":
-		for i in xrange(32):
+		for i in range(32):
 			hd["test_resize_{}".format(i)] = i
 
 		hd._resize(512)
 
 		assert hd._nbhd_size == 16
 
-		for i in xrange(32):
+		for i in range(32):
 			assert hd["test_resize_{}".format(i)] == i
 
 	elif scenario == "rsz_col":
@@ -237,7 +237,7 @@ def test_set_neighbor(out_of_bounds_neighbor):
 	else:
 		assert hd._nbhds[idx] != 255
 
-		for i in xrange(8):
+		for i in range(8):
 			hd._set_neighbor(idx, i)
 
 		assert hd._nbhds[idx] == 255
@@ -246,7 +246,7 @@ def test_set_neighbor(out_of_bounds_neighbor):
 def test_clear():
 	hd = HopscotchDict()
 
-	for i in xrange(256):
+	for i in range(256):
 		hd["test_clear_{}".format(i)] = i
 
 	hd.clear()
@@ -309,7 +309,7 @@ def test_setitem(scenario):
 	hd = HopscotchDict()
 
 	if scenario == "insert":
-		for i in sample(xrange(10000), 1000):
+		for i in sample(range(10000), 1000):
 			hd["test_setitem_{}".format(i)] = i
 
 		assert len(hd) == 1000
@@ -324,10 +324,10 @@ def test_setitem(scenario):
 		assert hd["test_setitem"]
 
 	elif scenario == "density_resize":
-		for i in xrange(105000):
+		for i in range(105000):
 			hd["test_setitem_{}".format(i)] = i
 
-		for i in xrange(105000):
+		for i in range(105000):
 			assert hd["test_setitem_{}".format(i)] == i
 
 	elif scenario == "ovw_err" or scenario == "ins_err":
@@ -348,12 +348,12 @@ def test_setitem(scenario):
 			hd["test_setitem"] = True
 
 	elif scenario == "snr":
-		for i in xrange(10, 17):
+		for i in range(10, 17):
 			hd[i] = "test_setitem_{}".format(i)
 
 		assert hd._size == 32
 
-		for i in xrange(1, 257, 32):
+		for i in range(1, 257, 32):
 			hd[i] = "test_setitem_{}".format(i)
 
 		hd[257] = "test_setitem_257"
@@ -365,12 +365,12 @@ def test_setitem(scenario):
 			assert hd[i] == "test_setitem_{}".format(i)
 
 	elif scenario == "bnr":
-		for i in xrange(26250):
+		for i in range(26250):
 			hd[i] = "test_setitem_{}".format(i)
 
 		assert hd._size == 2 ** 17
 
-		for i in xrange(30001, 30001 + 32 * 2 ** 17, 2 ** 17):
+		for i in range(30001, 30001 + 32 * 2 ** 17, 2 ** 17):
 			hd[i] = "test_setitem_{}".format(i)
 
 		assert len(hd) == 26282
@@ -408,7 +408,7 @@ def test_delitem(scenario):
 def test_contains(valid_key):
 	hd = HopscotchDict()
 
-	for i in sample(xrange(10000), 1000):
+	for i in sample(range(10000), 1000):
 		hd["test_contains_{}".format(i)] = i
 
 	for key in hd._keys:
@@ -423,7 +423,7 @@ def test_iter_and_len():
 
 	count = 0
 	limit = randint(1, 10000)
-	for i in sample(xrange(10000), limit):
+	for i in sample(range(10000), limit):
 		hd["test_iter_{}".format(i)] = i
 
 	for key in hd:
@@ -435,7 +435,7 @@ def test_iter_and_len():
 def test_repr():
 	hd = HopscotchDict()
 
-	for i in sample(xrange(10000), 100):
+	for i in sample(range(10000), 100):
 		hd["test_repr_{}".format(i)] = i
 
 	assert eval(repr(hd)) == hd
@@ -449,7 +449,7 @@ def test_eq_and_neq(scenario):
 	hd = HopscotchDict()
 	dc = {}
 
-	for i in xrange(5):
+	for i in range(5):
 		hd["test_eq_and_neq_{}".format(i)] = i
 		dc["test_eq_and_neq_{}".format(i)] = i
 
@@ -476,7 +476,7 @@ def test_eq_and_neq(scenario):
 def test_items_and_iteritems():
 	hd = HopscotchDict()
 
-	for i in sample(xrange(10000), 100):
+	for i in sample(range(10000), 100):
 		hd["test_items_and_iteritems_{}".format(i)] = i
 
 	for (k, v) in hd.iteritems():
@@ -487,7 +487,7 @@ def test_items_and_iteritems():
 def test_keys_and_iterkeys():
 	hd = HopscotchDict()
 
-	for i in sample(xrange(10000), 100):
+	for i in sample(range(10000), 100):
 		hd["test_keys_and_iterkeys_{}".format(i)] = i
 
 	keys = hd.keys()
@@ -498,7 +498,7 @@ def test_keys_and_iterkeys():
 def test_values_and_itervalues():
 	hd = HopscotchDict()
 
-	for i in sample(xrange(10000), 100):
+	for i in sample(range(10000), 100):
 		hd["test_values_and_itervalues_{}".format(i)] = i
 
 	vals = hd.values()
@@ -509,14 +509,14 @@ def test_values_and_itervalues():
 def test_reversed():
 	hd = HopscotchDict()
 
-	for i in sample(xrange(10000), 100):
+	for i in sample(range(10000), 100):
 		hd["test_reversed_{}".format(i)] = i
 
 	keys = hd.keys()
 	rev_keys = list(reversed(hd))
 
 	assert len(keys) == len(rev_keys)
-	for i in xrange(len(keys)):
+	for i in range(len(keys)):
 		assert keys[i] == rev_keys[len(keys) - i - 1]
 
 @pytest.mark.parametrize("valid_key", [True, False],
@@ -553,7 +553,7 @@ def test_pop(scenario):
 def test_popitem():
 	hd = HopscotchDict()
 
-	for i in sample(xrange(10000), 100):
+	for i in sample(range(10000), 100):
 		hd["test_popitem_{}".format(i)] = i
 
 	key = hd._keys[-1]
@@ -581,7 +581,7 @@ def test_setdefault(existing_key):
 def test_copy():
 	hd = HopscotchDict()
 
-	for i in sample(xrange(10000), 100):
+	for i in sample(range(10000), 100):
 		hd["test_copy_{}".format(i)] = i
 
 	hdc = hd.copy()
