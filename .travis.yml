@@ -12,4 +12,4 @@ python:
 
 install: true
 
-script: pytest
+script: py.test
