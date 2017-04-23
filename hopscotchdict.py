@@ -2,7 +2,7 @@ from __future__ import division
 from array import array
 from copy import copy
 from collections import MutableMapping
-from itertools import chain, izip
+from itertools import izip
 from sys import maxint
 
 class HopscotchDict(MutableMapping):

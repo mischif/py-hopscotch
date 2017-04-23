@@ -324,7 +324,6 @@ def test_setitem(scenario):
 		assert hd["test_setitem"]
 
 	elif scenario == "density_resize":
-		import pdb
 		for i in xrange(105000):
 			hd["test_setitem_{}".format(i)] = i
 
