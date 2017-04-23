@@ -300,24 +300,18 @@ class HopscotchDict(MutableMapping):
 
 		# Overwrite an existing key with new data
 		if act_idx:
-			if self._indices[act_idx] != self.FREE_ENTRY:
-				self._keys[self._indices[act_idx]] = key
-				self._values[self._indices[act_idx]] = value
-				self._hashes[self._indices[act_idx]] = abs(hash(key))
-				if not (len(self._keys) == len(self._values) == len(self._hashes)):
-					raise AssertionError((
-						u"Number of keys {0}; "
-						u"number of values {1}; "
-						u"number of hashes {2}").format(
-							len(self._keys),
-							len(self._values),
-							len(self._hashes)))
-				return
-
-			# If _lookup returns an index, but the index is free, there must
-			# have been leftover data and something's gone wrong
-			else:
-				raise AssertionError(u"_lookup returned a previously-freed index")
+			self._keys[self._indices[act_idx]] = key
+			self._values[self._indices[act_idx]] = value
+			self._hashes[self._indices[act_idx]] = abs(hash(key))
+			if not (len(self._keys) == len(self._values) == len(self._hashes)):
+				raise AssertionError((
+					u"Number of keys {0}; "
+					u"number of values {1}; "
+					u"number of hashes {2}").format(
+						len(self._keys),
+						len(self._values),
+						len(self._hashes)))
+			return
 
 		# Move existing data out of index to accomodate new data
 		elif self._indices[exp_idx] != self.FREE_ENTRY:
