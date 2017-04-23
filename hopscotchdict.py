@@ -362,7 +362,7 @@ class HopscotchDict(MutableMapping):
 		act_idx = self._lookup(key)
 		exp_idx = abs(hash(key)) % self._size
 
-		if act_idx:
+		if act_idx is not None:
 			# If the key's associated data isn't the last entry in their
 			# respective lists, swap with the last entries to not leave a hole
 			# in said tables and update the _indices pointer

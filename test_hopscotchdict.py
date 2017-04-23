@@ -2,6 +2,7 @@ import pytest
 
 from hopscotchdict import HopscotchDict
 
+from copy import copy
 from random import randint, sample
 
 @pytest.mark.parametrize("log_array_size", [4, 8, 16],
@@ -173,10 +174,9 @@ def test_lookup(scenario):
 		assert hd._lookup("test_lookup") == idx
 
 	elif scenario == "displaced":
-		idx = abs(hash("test_lookup_1")) % hd._size
-		hd["test_lookup_1"] = True
-		hd["test_lookup_9"] = True
-		assert hd._lookup("test_lookup_1") == idx + 1
+		hd[3] = True
+		hd[11] = True
+		assert hd._lookup(3) == 4
 
 	elif scenario == "error":
 		idx = abs(hash("test_lookup")) % hd._size
@@ -278,8 +278,6 @@ def test_init(creation_args):
 		hd = HopscotchDict(zip(keys, vals))
 	if creation_args == "dict":
 		hd = HopscotchDict(dict(zip(keys, vals)))
-
-	assert hd._size == 8
 
 	if creation_args == "none":
 		assert len(hd) == 0
@@ -388,15 +386,22 @@ def test_setitem(scenario):
 	ids = ["found-key", "missing-key"])
 def test_delitem(scenario):
 	hd = HopscotchDict()
-	idx = abs(hash("test_delitem")) % hd._size
 
 	if scenario == "found":
-		hd["test_delitem"] = True
-		assert len(hd) == 1
+		for i in sample(range(10000), 6):
+			hd["test_delitem_{}".format(i)] = i
 
-		del hd["test_delitem"]
+		assert len(hd) == len(hd._keys)
+
+		keys = copy(hd._keys)
+
+		for key in keys:
+			del hd[key]
+
 		assert len(hd) == 0
-		assert hd._indices[idx] == hd.FREE_ENTRY
+
+		for i in range(hd._size):
+			assert hd._indices[i] == hd.FREE_ENTRY
 
 	elif scenario == "missing":
 		with pytest.raises(KeyError):
