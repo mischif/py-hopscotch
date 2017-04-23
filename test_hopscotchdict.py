@@ -479,9 +479,9 @@ def test_items_and_iteritems():
 	for i in sample(xrange(10000), 100):
 		hd["test_items_and_iteritems_{}".format(i)] = i
 
-	items = hd.items()
-	for item in hd.iteritems():
-		assert item in items
+	for (k, v) in hd.iteritems():
+		assert k in hd
+		assert hd[k] == v
 
 
 def test_keys_and_iterkeys():

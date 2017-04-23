@@ -2,8 +2,15 @@ from __future__ import division
 from array import array
 from copy import copy
 from collections import MutableMapping
-from itertools import izip
 from sys import maxint
+
+# Import the backported version of zip that acts like izip
+try:
+	from future_builtins import zip
+# 3.x doesn't have future_builtins
+# (neither does < 2.6 but those versions aren't supported)
+except ImportError:
+	pass
 
 class HopscotchDict(MutableMapping):
 
@@ -35,7 +42,7 @@ class HopscotchDict(MutableMapping):
 
 	def _clear_neighbor(self, idx, nbhd_idx):
 		if nbhd_idx >= self._nbhd_size:
-			raise ValueError("Trying to clear neighbor outside neighborhood")
+			raise ValueError(u"Trying to clear neighbor outside neighborhood")
 
 		self._nbhds[idx] &= ~(1 << self._nbhd_size - nbhd_idx - 1)
 
@@ -66,7 +73,7 @@ class HopscotchDict(MutableMapping):
 			# The open index is too far away, so find the closest index to the
 			# given index to free up and repeat until the given index is opened
 			else:
-				for i in xrange(max(idx, act_idx - self._nbhd_size) + 1, act_idx):
+				for i in range(max(idx, act_idx - self._nbhd_size) + 1, act_idx):
 
 					# If the last index before the open index has no displaced
 					# neighbors or its closest one is after the open index,
@@ -77,7 +84,7 @@ class HopscotchDict(MutableMapping):
 						if (not self._nbhds[i]
 							or min(self._get_displaced_neighbors(i)) > act_idx):
 								raise Exception((
-										"No space available before open index"))
+										u"No space available before open index"))
 
 					# If the index has displaced neighbors and one is before the open
 					# index, move the data in the neighbor into the open index
@@ -94,13 +101,13 @@ class HopscotchDict(MutableMapping):
 						continue
 
 		# No open indices exist between the given index and the end of the array
-		raise Exception("Could not open index while maintaining invariant")
+		raise Exception(u"Could not open index while maintaining invariant")
 
 	def _get_displaced_neighbors(self, idx):
 		neighbors = []
 		nbhd = self._nbhds[idx]
 
-		for i in xrange(self._nbhd_size - 1, -1, -1):
+		for i in range(self._nbhd_size - 1, -1, -1):
 			if nbhd & 1 << i:
 				neighbors.append(idx + self._nbhd_size - i - 1)
 
@@ -113,13 +120,13 @@ class HopscotchDict(MutableMapping):
 		for idx in self._get_displaced_neighbors(hashed % self._size):
 			if idx >= self._size:
 				raise AssertionError((
-					"Index {0} has supposed displaced neighbor "
-					"outside array").format(hashed % self._size))
+					u"Index {0} has supposed displaced neighbor "
+					u"outside array").format(hashed % self._size))
 
 			if self._indices[idx] < 0:
 				raise AssertionError((
-					"Index {0} has supposed displaced neighbor that points to "
-					"free index").format(hashed % self._size))
+					u"Index {0} has supposed displaced neighbor that points to "
+					u"free index").format(hashed % self._size))
 
 			if (self._keys[self._indices[idx]] is key
 				or self._hashes[self._indices[idx]] == hashed
@@ -130,7 +137,7 @@ class HopscotchDict(MutableMapping):
 	def _resize(self, new_size):
 		# Dict size is a power of two to make modulo operations quicker
 		if new_size & new_size - 1:
-			raise AssertionError("New size for dict not a power of 2")
+			raise AssertionError(u"New size for dict not a power of 2")
 
 		# Neighborhoods must be at least as large as the base-2 logarithm of
 		# the dict size
@@ -144,7 +151,7 @@ class HopscotchDict(MutableMapping):
 		if resized_nbhd_size > self._nbhd_size:
 			if resized_nbhd_size > self.MAX_NBHD_SIZE:
 				raise AssertionError(
-					"Resizing requires too-large neighborhood")
+					u"Resizing requires too-large neighborhood")
 			self._nbhd_size = min(s for s in self.ALLOWED_NBHD_SIZES if s >= resized_nbhd_size)
 
 		self._nbhds = self._make_nbhds(self._nbhd_size, new_size)
@@ -176,7 +183,7 @@ class HopscotchDict(MutableMapping):
 
 	def _set_neighbor(self, idx, nbhd_idx):
 		if nbhd_idx >= self._nbhd_size:
-			raise ValueError("Trying to clear neighbor outside neighborhood")
+			raise ValueError(u"Trying to clear neighbor outside neighborhood")
 
 		self._nbhds[idx] |= (1 << self._nbhd_size - nbhd_idx - 1)
 
@@ -230,7 +237,7 @@ class HopscotchDict(MutableMapping):
 		return zip(self._keys, self._values)
 
 	def iteritems(self):
-		return izip(self._keys, self._values)
+		return self.items()
 
 	def iterkeys(self):
 		return self.__iter__()
@@ -299,9 +306,9 @@ class HopscotchDict(MutableMapping):
 				self._hashes[self._indices[act_idx]] = abs(hash(key))
 				if not (len(self._keys) == len(self._values) == len(self._hashes)):
 					raise AssertionError((
-						"Number of keys {0}; "
-						"number of values {1}; "
-						"number of hashes {2}").format(
+						u"Number of keys {0}; "
+						u"number of values {1}; "
+						u"number of hashes {2}").format(
 							len(self._keys),
 							len(self._values),
 							len(self._hashes)))
@@ -310,7 +317,7 @@ class HopscotchDict(MutableMapping):
 			# If _lookup returns an index, but the index is free, there must
 			# have been leftover data and something's gone wrong
 			else:
-				raise AssertionError("_lookup returned a previously-freed index")
+				raise AssertionError(u"_lookup returned a previously-freed index")
 
 		# Move existing data out of index to accomodate new data
 		elif self._indices[exp_idx] != self.FREE_ENTRY:
@@ -337,9 +344,9 @@ class HopscotchDict(MutableMapping):
 		self._count += 1
 		if not (len(self._keys) == len(self._values) == len(self._hashes)):
 			raise AssertionError((
-				"Number of keys {0}; "
-				"number of values {1}; "
-				"number of hashes {2}").format(
+				u"Number of keys {0}; "
+				u"number of values {1}; "
+				u"number of hashes {2}").format(
 					len(self._keys),
 					len(self._values),
 					len(self._hashes)))
@@ -428,11 +435,11 @@ class HopscotchDict(MutableMapping):
 		return not self.__eq__(other)
 
 	def __repr__(self):
-		return "HopscotchDict({0!r})".format(self.items())
+		return u"HopscotchDict({0!r})".format(list(self.items()))
 
 	def __reversed__(self):
 		return reversed(self._keys)
 
 	def __str__(self):
-		return "{{{0}}}".format(
-			", ".join("'{0!s}': {1!s}".format(*i) for i in self.iteritems()))
+		return u"{{{0}}}".format(
+			u", ".join(u"'{0!s}': {1!s}".format(*i) for i in self.iteritems()))
