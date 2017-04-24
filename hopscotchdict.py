@@ -28,6 +28,15 @@ class HopscotchDict(MutableMapping):
 
 	@staticmethod
 	def _make_indices(size):
+		"""
+		Create the array that holds the index to the _keys, _values and _hashes
+		lists that hold the data
+
+		:param size: The size of array to create
+
+		:returns: An array of length `size` whose entries can hold an integer of
+							at least `size`
+		"""
 		if size <= 2**7: return array("b", [HopscotchDict.FREE_ENTRY]) * size
 		if size <= 2**15: return array("h", [HopscotchDict.FREE_ENTRY]) * size
 		if size <= 2**31: return array("i", [HopscotchDict.FREE_ENTRY]) * size
@@ -35,18 +44,43 @@ class HopscotchDict(MutableMapping):
 
 	@staticmethod
 	def _make_nbhds(nbhd_size, array_size):
+		"""
+		Create the array that holds the neighborhood for each index in _indices;
+		each neighborhood is stored as an n-bit integer where n is the desired size
+
+		:param nbhd_size: The desired neighborhood size in bits
+		:param array_size: The size of array to create
+
+		:returns: An array of length `array_size` containing `nbhd_size`-bit integers
+		"""
 		if nbhd_size == 8: return array("B", [0]) * array_size
 		if nbhd_size == 16: return array("H", [0]) * array_size
 		if nbhd_size == 32: return array("I", [0]) * array_size
 		return array("L", [0]) * array_size
 
 	def _clear_neighbor(self, idx, nbhd_idx):
+		"""
+		Set the given neighbor for the given index as unoccupied, with the neighbor
+		value 0 representing the given index
+
+		:param idx: The index in _indices
+		:param nbhd_idx: The neighbor in the neighborhood of idx to set unoccupied
+		"""
 		if nbhd_idx >= self._nbhd_size:
 			raise ValueError(u"Trying to clear neighbor outside neighborhood")
 
 		self._nbhds[idx] &= ~(1 << self._nbhd_size - nbhd_idx - 1)
 
 	def _free_up(self, idx):
+		"""
+		Set the specified index in _indices as unoccupied by moving stored data to
+		an unoccupied neighbor; if all neighbors are occupied then move data from
+		a neighbor out to one of its neighbors in an attempt to move an opening
+		closer to the specified index
+		The magic function in hopscotch hashing
+
+		:param idx: The index in _indices to open up
+		"""
 		act_idx = idx
 		while act_idx < self._size:
 
@@ -104,6 +138,15 @@ class HopscotchDict(MutableMapping):
 		raise Exception(u"Could not open index while maintaining invariant")
 
 	def _get_displaced_neighbors(self, idx):
+		"""
+		Find the indices that supposedly contain an item that originally hashed to
+		the given index, but were displaced during some previous _free_up call
+
+		:param idx: The index in _indices to find displaced neighbors for
+
+		:returns: A list of indices in _indices that supposedly contain an item that
+							originally hashed to the given location
+		"""
 		neighbors = []
 		nbhd = self._nbhds[idx]
 
@@ -114,6 +157,14 @@ class HopscotchDict(MutableMapping):
 		return neighbors
 
 	def _lookup(self, key):
+		"""
+		Find the index in _indices that corresponds to the given key
+
+		:param key: The key to search for in the dict
+
+		:returns: The index in _indices that corresponds to the given key if it
+							exists; None otherwise
+		"""
 		retval = None
 		hashed = abs(hash(key))
 
@@ -135,6 +186,11 @@ class HopscotchDict(MutableMapping):
 		return retval
 
 	def _resize(self, new_size):
+		"""
+		Resize the dict and relocates the current entries to their new indices
+
+		:param new_size: The desired new size of the dict
+		"""
 		# Dict size is a power of two to make modulo operations quicker
 		if new_size & new_size - 1:
 			raise AssertionError(u"New size for dict not a power of 2")
@@ -180,12 +236,21 @@ class HopscotchDict(MutableMapping):
 
 
 	def _set_neighbor(self, idx, nbhd_idx):
+		"""
+		Set the given neighbor for the given index as occupied
+
+		:param idx: The index in _indices
+		:param nbhd_idx: The neighbor in the neighborhood of idx to set occupied
+		"""
 		if nbhd_idx >= self._nbhd_size:
 			raise ValueError(u"Trying to clear neighbor outside neighborhood")
 
 		self._nbhds[idx] |= (1 << self._nbhd_size - nbhd_idx - 1)
 
 	def clear(self):
+		"""
+		Remove all the data from the dict and return it to its original size
+		"""
 		# The total size of main dict, including empty spaces
 		self._size = 8
 
@@ -213,6 +278,9 @@ class HopscotchDict(MutableMapping):
 		self._indices = self._make_indices(self._size)
 
 	def copy(self):
+		"""
+		Create a new instance with all items inserted
+		"""
 		out = HopscotchDict()
 
 		for key in self._keys:
@@ -221,6 +289,16 @@ class HopscotchDict(MutableMapping):
 		return out
 
 	def get(self, key, default=None):
+		"""
+		Retrieve the value corresponding to the specified key, returning the
+		default value if not found
+
+		:param key: The key to retrieve data from
+		:param default: The value to return if the specified key does not exist
+
+		:returns: The value in the dict if the specified key exists;
+							the default value if it does not
+		"""
 		out = default
 		try:
 			out = self.__getitem__(key)
@@ -229,24 +307,67 @@ class HopscotchDict(MutableMapping):
 		return out
 
 	def has_key(self, key):
+		"""
+		Check if the given key exists
+
+		:param key: The key to check for existence
+
+		:returns: True if the key exists; False if it does not
+		"""
 		return self.__contains__(key)
 
 	def items(self):
+		"""
+		Return an iterator over the `(key, value)` pairs; see iteritems()
+
+		:returns: An iterator over the `(key, value)` pairs
+		"""
 		return zip(self._keys, self._values)
 
 	def iteritems(self):
+		"""
+		Return an iterator over the `(key, value)` pairs; see items()
+
+		:returns: An iterator over the `(key, value)` pairs
+		"""
 		return self.items()
 
 	def iterkeys(self):
+		"""
+		An iterator over the keys
+
+		:returns: An iterator over the keys
+		"""
 		return self.__iter__()
 
 	def itervalues(self):
+		"""
+		An iterator over the values
+
+		:returns: An iterator over the values
+		"""
 		return iter(self._values)
 
 	def keys(self):
+		"""
+		A list of the keys
+
+		:returns: A list of the keys
+		"""
 		return self._keys
 
 	def pop(self, key, default=None):
+		"""
+		Return the value associated with the given key and removes it if the key
+		exists; returns the given default value if the key does not exist;
+		errors if the key does not exist and no default value was given
+
+		:param key: The key to search for
+		:param default: The value to return if the given key does not exist
+
+		:returns: The value associated with the key if it exists, the default value
+							if it does not
+		"""
 		out = default
 
 		try:
@@ -260,6 +381,11 @@ class HopscotchDict(MutableMapping):
 		return out
 
 	def popitem(self):
+		"""
+		Remove an arbitrary `(key, value)` pair if one exists, erroring otherwise
+
+		:returns: An arbitrary `(key, value)` pair from the dict if one exists
+		"""
 		if not len(self):
 			raise KeyError
 		else:
@@ -268,6 +394,16 @@ class HopscotchDict(MutableMapping):
 			return (key, val)
 
 	def setdefault(self, key, default=None):
+		"""
+		Return the value associated with the given key if it exists, set the value
+		associated with the given key to the default value if it does not
+
+		:param key: The key to search for
+		:param default: The value to insert if the key does not exist
+
+		:returns: The value associated with the given key if it exists, the default
+							value otherwise
+		"""
 		try:
 			return self.__getitem__(key)
 		except KeyError:
@@ -275,10 +411,17 @@ class HopscotchDict(MutableMapping):
 			return default
 
 	def values(self):
+		"""
+		Return a list of the values 
+
+		:returns: a list of the values
+		"""
 		return self._values
 
 	def __init__(self, *args, **kwargs):
-
+		"""
+		Create a new instance with any specified values
+		"""
 		# Use clear function to do initial setup for new tables
 		if not hasattr(self, "_size"):
 			self.clear()
@@ -286,6 +429,14 @@ class HopscotchDict(MutableMapping):
 		self.update(*args, **kwargs)
 
 	def __getitem__(self, key):
+		"""
+		Retrieve the value associated with the given key, erroring if the key does
+		not exist
+
+		:param key: The key to search for
+
+		:returns: The value associated with the given key
+		"""
 		idx = self._lookup(key)
 		if idx is not None:
 			return self._values[self._indices[idx]]
@@ -293,6 +444,13 @@ class HopscotchDict(MutableMapping):
 			raise KeyError(key)
 
 	def __setitem__(self, key, value):
+		"""
+		Map the given key to the given value, overwriting any previously-stored
+		value if it exists
+
+		:param key: The key to set
+		:param value: The value to map the key to
+		"""
 		exp_idx = abs(hash(key)) % self._size
 		act_idx = self._lookup(key)
 
@@ -351,6 +509,9 @@ class HopscotchDict(MutableMapping):
 
 
 	def __delitem__(self, key):
+		"""
+		Remove the value the given key maps to
+		"""
 		act_idx = self._lookup(key)
 		exp_idx = abs(hash(key)) % self._size
 
@@ -395,12 +556,25 @@ class HopscotchDict(MutableMapping):
 			raise KeyError(key)
 
 	def __contains__(self, key):
+		"""
+		Check if the given key exists
+
+		:returns: True if the key exists, False otherwise
+		"""
 		if self._lookup(key) is not None:
 			return True
 		else:
 			return False
 
 	def __eq__(self, other):
+		"""
+		Check if the given object is equivalent to this dict
+
+		:param other: The object to test for equality to this dict
+
+		:returns: True if the given object is equivalent to this dict,
+							False otherwise
+		"""
 		if not isinstance(other, MutableMapping):
 			return False
 
@@ -418,20 +592,54 @@ class HopscotchDict(MutableMapping):
 		return True
 
 	def __iter__(self):
+		"""
+		Return an iterator over the keys
+
+		:returns An iterator over the keys
+		"""
 		return iter(self._keys)
 
 	def __len__(self):
+		"""
+		Return the number of items currently stored
+
+		:returns: The number of items currently stored
+		"""
 		return self._count
 
 	def __ne__(self, other):
+		"""
+		Check if the given object is not equivalent to this dict
+
+		:param other: The object to test for equality to this dict
+
+		:returns: True if the given object is not equivalent to this dict,
+							False otherwise
+		"""
 		return not self.__eq__(other)
 
 	def __repr__(self):
+		"""
+		Return a representation that could be used to create an equivalent dict
+		using `eval()`
+
+		:returns: A string that could be used to create an equivalent representation
+		"""
 		return u"HopscotchDict({0!r})".format(list(self.items()))
 
 	def __reversed__(self):
+		"""
+		Return an iterator over the keys in reverse order
+
+		:returns: An iterator over the keys in reverse order
+		"""
 		return reversed(self._keys)
 
 	def __str__(self):
+		"""
+		Return a simpler representation of the items in the dict
+
+		:returns: A string containing all items in the dict
+		"""
 		return u"{{{0}}}".format(
 			u", ".join(u"'{0!s}': {1!s}".format(*i) for i in self.iteritems()))
