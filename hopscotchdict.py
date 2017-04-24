@@ -201,9 +201,6 @@ class HopscotchDict(MutableMapping):
 		# 2**k requires k+1 bits to represent, so subtract one
 		resized_nbhd_size = new_size.bit_length() - 1
 
-		# As long as the size of the dict isn't squared during resizing,
-		# multiplying neighborhood size by 2 will be sufficient as long as the
-		# result is less than a machine word
 		if resized_nbhd_size > self._nbhd_size:
 			if resized_nbhd_size > self.MAX_NBHD_SIZE:
 				raise AssertionError(
@@ -224,15 +221,15 @@ class HopscotchDict(MutableMapping):
 				self._indices[exp_idx] = data_idx
 				self._set_neighbor(exp_idx, 0)
 			else:
-					# _resize was called either because the dict was too dense or an
-					# item could not be added w/o violating an invariant; in the
-					# first case all invariants will still hold with even more space
-					# so the call to _free_op will succeed; in the second case the item
-					# that triggered this resize has not yet been added to the dict and
-					# thus is equivalent the first case and the call will again succeed
-					self._free_up(exp_idx)
-					self._indices[exp_idx] = data_idx
-					self._set_neighbor(exp_idx, 0)
+				# _resize was called either because the dict was too dense or an
+				# item could not be added w/o violating an invariant; in the
+				# first case all invariants will still hold with even more space
+				# so the call to _free_op will succeed; in the second case the item
+				# that triggered this resize has not yet been added to the dict and
+				# thus is equivalent the first case and the call will again succeed
+				self._free_up(exp_idx)
+				self._indices[exp_idx] = data_idx
+				self._set_neighbor(exp_idx, 0)
 
 
 	def _set_neighbor(self, idx, nbhd_idx):
