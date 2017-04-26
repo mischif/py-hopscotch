@@ -23,6 +23,12 @@ except ImportError:
 
 class HopscotchDict(MutableMapping):
 
+# Prevent default creation of __dict__, which should save space if many
+# instances of HopscotchDict are used at once
+# (Only true on 3.x, as 2.x creates __dict__ regardless)
+	__slots__ = ("_count", "_hashes", "_indices", "_keys", "_nbhds", "_nbhd_size",
+							 "_size", "_values")
+
 	# Python ints are signed, add one to get word length
 	MAX_NBHD_SIZE = maxsize.bit_length() + 1
 
