@@ -133,6 +133,17 @@ def test_invalid_free_up(scenario):
 		with pytest.raises(Exception):
 			hd._free_up(1)
 
+def test_unnecessary_free_up():
+	hd = HopscotchDict()
+
+	for i in range(2,7):
+		hd[i] = "test_unnecessary_free_up_{}".format(i)
+
+	hd._free_up(0)
+
+	assert hd._indices[0] == hd.FREE_ENTRY
+	assert not hd._nbhds[0]
+
 @pytest.mark.parametrize("with_collisions", [True, False],
 	ids = ["with-collisions", "no-collisions"])
 def test_get_displaced_neighbors(with_collisions):

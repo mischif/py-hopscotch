@@ -103,6 +103,11 @@ class HopscotchDict(MutableMapping):
 				act_idx += 1
 				continue
 
+			# Attempting to free up an index that currently points nowhere should
+			# be a no-op
+			elif act_idx == idx:
+				return
+
 			# If there is an open index in the given index's neighborhood,
 			# move the pointer in the given index to the open index and update
 			# the given index's neighborhood
