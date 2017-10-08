@@ -212,8 +212,8 @@ class HopscotchDict(MutableMapping):
 					u"free index").format(hashed % self._size))
 
 			if (self._keys[self._indices[idx]] is key
-				or self._hashes[self._indices[idx]] == hashed
-				and self._keys[self._indices[idx]] == key):
+				or (self._hashes[self._indices[idx]] == hashed
+				and self._keys[self._indices[idx]] == key)):
 					retval = idx
 		return retval
 
@@ -484,7 +484,7 @@ class HopscotchDict(MutableMapping):
 		act_idx = self._lookup(key)
 
 		# Overwrite an existing key with new data
-		if act_idx:
+		if act_idx is not None:
 			self._keys[self._indices[act_idx]] = key
 			self._values[self._indices[act_idx]] = value
 			self._hashes[self._indices[act_idx]] = abs(hash(key))
