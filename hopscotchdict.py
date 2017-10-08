@@ -149,7 +149,7 @@ class HopscotchDict(MutableMapping):
 					if i == act_idx - 1:
 						if (not self._nbhds[i]
 							or min(self._get_displaced_neighbors(i)) > act_idx):
-								raise Exception((
+								raise RuntimeError((
 										u"No space available before open index"))
 
 					# If the index has displaced neighbors and one is before the open
@@ -167,7 +167,7 @@ class HopscotchDict(MutableMapping):
 						continue
 
 		# No open indices exist between the given index and the end of the array
-		raise Exception(u"Could not open index while maintaining invariant")
+		raise RuntimeError(u"Could not open index while maintaining invariant")
 
 	def _get_displaced_neighbors(self, idx):
 		"""
@@ -202,12 +202,12 @@ class HopscotchDict(MutableMapping):
 
 		for idx in self._get_displaced_neighbors(hashed % self._size):
 			if idx >= self._size:
-				raise AssertionError((
+				raise IndexError((
 					u"Index {0} has supposed displaced neighbor "
 					u"outside array").format(hashed % self._size))
 
 			if self._indices[idx] < 0:
-				raise AssertionError((
+				raise RuntimeError((
 					u"Index {0} has supposed displaced neighbor that points to "
 					u"free index").format(hashed % self._size))
 
@@ -225,7 +225,7 @@ class HopscotchDict(MutableMapping):
 		"""
 		# Dict size is a power of two to make modulo operations quicker
 		if new_size & new_size - 1:
-			raise AssertionError(u"New size for dict not a power of 2")
+			raise ValueError(u"New size for dict not a power of 2")
 
 		# Neighborhoods must be at least as large as the base-2 logarithm of
 		# the dict size
@@ -235,7 +235,7 @@ class HopscotchDict(MutableMapping):
 
 		if resized_nbhd_size > self._nbhd_size:
 			if resized_nbhd_size > self.MAX_NBHD_SIZE:
-				raise AssertionError(
+				raise ValueError(
 					u"Resizing requires too-large neighborhood")
 			self._nbhd_size = min(s for s in self.ALLOWED_NBHD_SIZES if s >= resized_nbhd_size)
 
@@ -489,7 +489,7 @@ class HopscotchDict(MutableMapping):
 			self._values[self._indices[act_idx]] = value
 			self._hashes[self._indices[act_idx]] = abs(hash(key))
 			if not (len(self._keys) == len(self._values) == len(self._hashes)):
-				raise AssertionError((
+				raise RuntimeError((
 					u"Number of keys {0}; "
 					u"number of values {1}; "
 					u"number of hashes {2}").format(
@@ -504,7 +504,7 @@ class HopscotchDict(MutableMapping):
 				self._free_up(exp_idx)
 
 			# No way to keep neighborhood invariant, resize and try again
-			except Exception:
+			except RuntimeError:
 				if self._size < 2**16:
 					self._resize(self._size * 4)
 				else:
@@ -522,7 +522,7 @@ class HopscotchDict(MutableMapping):
 		self._set_neighbor(exp_idx, 0)
 		self._count += 1
 		if not (len(self._keys) == len(self._values) == len(self._hashes)):
-			raise AssertionError((
+			raise RuntimeError((
 				u"Number of keys {0}; "
 				u"number of values {1}; "
 				u"number of hashes {2}").format(

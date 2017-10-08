@@ -148,14 +148,14 @@ def test_invalid_free_up(scenario):
 		for i in range(2, 8):
 			hd[i] = "test_invalid_free_up_{}".format(i)
 
-		with pytest.raises(Exception):
+		with pytest.raises(RuntimeError):
 			hd._free_up(2)
 
 	elif scenario == "last_none":
 		for i in range(1, 257, 32):
 			hd[i] = "test_invalid_free_up_{}".format(i)
 
-		with pytest.raises(Exception):
+		with pytest.raises(RuntimeError):
 			hd._free_up(1)
 
 	elif scenario == "last_distant":
@@ -171,7 +171,7 @@ def test_invalid_free_up(scenario):
 		for i in range(1, 257, 32):
 			hd[i] = "test_invalid_free_up_{}".format(i)
 
-		with pytest.raises(Exception):
+		with pytest.raises(RuntimeError):
 			hd._free_up(1)
 
 @pytest.mark.parametrize("with_collisions", [True, False],
@@ -200,9 +200,8 @@ def test_get_displaced_neighbors(with_collisions):
 		for i in range(6):
 			assert hd._get_displaced_neighbors(i) == [i]
 
-
-@pytest.mark.parametrize("scenario", ["missing", "found", "displaced", "error"],
-	ids = ["missing-key", "found-key", "displaced-key", "lookup-error"])
+@pytest.mark.parametrize("scenario", ["missing", "found", "displaced", "outside", "free"],
+	ids = ["missing-key", "found-key", "displaced-key", "neighbor-outside-array", "neighbor-previously-freed"])
 def test_lookup(scenario):
 	hd = HopscotchDict()
 
@@ -219,15 +218,19 @@ def test_lookup(scenario):
 		hd[11] = True
 		assert hd._lookup(3) == 4
 
-	elif scenario == "error":
-		idx = abs(hash("test_lookup")) % hd._size
-		hd["test_lookup"] = True
-		hd._set_neighbor(idx, (idx - 1) % hd._size)
-		hd._set_neighbor(idx, (idx + 1) % hd._size)
+	elif scenario == "outside":
+		hd[7] = "test_lookup_7"
+		hd._set_neighbor(7, 1)
 
-		with pytest.raises(AssertionError):
-			hd._lookup("test_lookup")
+		with pytest.raises(IndexError):
+			hd._lookup(7)
 
+	elif scenario == "free":
+		hd[4] = "test_setitem"
+		hd._indices[4] = hd.FREE_ENTRY
+
+		with pytest.raises(RuntimeError):
+			hd._lookup(4)
 
 @pytest.mark.parametrize("scenario",
 	["bad_size", "too_large", "nbhd_inc", "rsz_col"],
@@ -237,11 +240,11 @@ def test_resize(scenario):
 	hd = HopscotchDict()
 
 	if scenario == "bad_size":
-		with pytest.raises(AssertionError):
+		with pytest.raises(ValueError):
 			hd._resize(25)
 
 	elif scenario == "too_large":
-		with pytest.raises(AssertionError):
+		with pytest.raises(ValueError):
 			hd._resize(2 ** 65)
 
 	elif scenario == "nbhd_inc":
@@ -340,10 +343,9 @@ def test_getitem(valid_key):
 
 
 @pytest.mark.parametrize("scenario",
-	["insert", "overwrite", "density_resize", "snr", "bnr", "ovw_err", "ins_err",
-	 "lkp_err"],
+	["insert", "overwrite", "density_resize", "snr", "bnr", "ovw_err", "ins_err"],
 	ids = ["insert", "overwrite", "density-resize", "small-nbhd-resize",
-		   "big-nbhd-resize", "overwrite-error", "insert-error", "lookup-error"])
+		   "big-nbhd-resize", "overwrite-error", "insert-error"])
 def test_setitem(scenario):
 	hd = HopscotchDict()
 
@@ -379,15 +381,7 @@ def test_setitem(scenario):
 		hd["test"] = True
 		hd._values.pop()
 
-		with pytest.raises(AssertionError):
-			hd["test_setitem"] = True
-
-	elif scenario == "lkp_err":
-		idx = abs(hash("test_setitem")) % hd._size
-		hd["test_setitem"] = False
-		hd._indices[idx] = hd.FREE_ENTRY
-
-		with pytest.raises(AssertionError):
+		with pytest.raises(RuntimeError):
 			hd["test_setitem"] = True
 
 	elif scenario == "snr":
