@@ -13,11 +13,11 @@ from copy import copy
 from collections import MutableMapping
 from sys import maxsize
 
-# Import the backported version of zip that acts like izip
+# Import the backported versions of zip that acts like izip and map that acts like imap
 # Will fail for < 2.6 (which isn't supported)
 # and > 3.0 (where it's built in)
 try:
-	from future_builtins import zip
+	from future_builtins import zip, map
 except ImportError:
 	pass
 
@@ -610,15 +610,11 @@ class HopscotchDict(MutableMapping):
 		if len(self) != len(other):
 			return False
 
-		all_keys = set(self._keys).union(other.keys())
-		if len(all_keys) != len(self):
+		if set(self._keys) ^ set(other.keys()):
 			return False
 
-		for key in all_keys:
-			if (type(self[key]) != type(other[key])
-				or self[key] != other[key]):
-					return False
-		return True
+		return all(map(lambda key: type(self[key]) == type(other[key]) and self[key] == other[key],
+					   self._keys))
 
 	def __iter__(self):
 		"""

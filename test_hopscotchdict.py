@@ -495,7 +495,7 @@ def test_eq_and_neq(scenario):
 
 	for i in range(5):
 		hd["test_eq_and_neq_{}".format(i)] = i
-		dc["test_eq_and_neq_{}".format(i)] = i
+		dc[u"test_eq_and_neq_{}".format(i)] = i
 
 	if (scenario == "bad_len"
 		or scenario == "bad_keys"):
