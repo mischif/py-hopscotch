@@ -53,36 +53,49 @@ def test_clear_neighbor(out_of_bounds_neighbor):
 		assert hd._nbhds[idx] == 0
 
 
-@pytest.mark.parametrize("scenario", ["near", "far"],
-	ids = ["inside-neighborhood", "outside-neighborhood"])
+@pytest.mark.parametrize("scenario", ["unnecessary", "near", "far", "displaced"],
+	ids = ["unnecessary-action", "inside-neighborhood", "outside-neighborhood", "displaced-entry"])
 def test_valid_free_up(scenario):
 	hd = HopscotchDict()
 
-	if scenario == "near":
-		end_index = 6
-	elif scenario == "far":
-		end_index = 11
+	if scenario == "unnecessary":
+		for i in range(2,7):
+			hd[i] = "test_valid_free_up_{}".format(i)
 
-	for i in range(1, end_index):
-		hd[i] = "test_valid_free_up_{}".format(i)
+		hd._free_up(0)
 
-	# Freeing up inside neighborhood: move to index 6
-	# Freeing up outside neighborhood: move to index 4, 4 moves to 11
-	hd._free_up(1)
+		assert hd._indices[0] == hd.FREE_ENTRY
+		assert not hd._nbhds[0]
 
-	# Make sure index 1 is open
-	assert hd._indices[1] == hd.FREE_ENTRY
-	assert not hd._nbhds[1] & 1 << 7
+	elif scenario == "near":
+		for i in range(1, 6):
+			hd[i] = "test_valid_free_up_{}".format(i)
 
-	if scenario == "near":
+		# Move to index 6
+		hd._free_up(1)
+
+		# Make sure index 1 is open
+		assert hd._indices[1] == hd.FREE_ENTRY
+		assert not hd._nbhds[1] & 1 << 7
+
 		# Make sure neighborhood knows where displaced entry is
 		assert hd._nbhds[1] & 1 << 2
 
 		# Index 6 in _indices should point to index 0 in _keys, _values, _hashes
 		assert hd._indices[6] == 0
-		assert not hd._nbhds[6] & 1 << 7
+		assert not hd._nbhds[6]
 
 	elif scenario == "far":
+		for i in range(1, 11):
+			hd[i] = "test_valid_free_up_{}".format(i)
+
+		# Move to index 4, 4 moves to 11
+		hd._free_up(1)
+
+		# Make sure index 1 is open
+		assert hd._indices[1] == hd.FREE_ENTRY
+		assert not hd._nbhds[1] & 1 << 7
+
 		# Make sure neighborhood knows where displaced entry is
 		assert hd._nbhds[1] & 1 << 4
 
@@ -95,8 +108,36 @@ def test_valid_free_up(scenario):
 
 		# Index 11 in _indices should point to index 3 in other lists
 		assert hd._indices[11] == 3
-		assert not hd._nbhds[11] & 1 << 7
-		assert not hd._nbhds[11] & 1
+		assert not hd._nbhds[11]
+
+	elif scenario == "displaced":
+		hd._resize(16)
+
+		hd[0] = "test_valid_free_up_0"
+		hd[16] = "test_valid_free_up_16"
+
+		for i in range(2,8):
+			hd[i] = "test_valid_free_up_{}".format(i)
+
+		# Move to index 2; 2 goes to 8
+		hd._free_up(1)
+
+		# Make sure index 1 is open
+		assert hd._indices[1] == hd.FREE_ENTRY
+		assert not hd._nbhds[1]
+
+		# Index 2 in _indices should point to index 0 in other lists
+		assert hd._indices[2] == 0
+		assert not hd._nbhds[2] & 1 << 7
+
+		# Index 8 in _indices should point to index 2 in other lists
+		assert hd._indices[8] == 2
+		assert not hd._nbhds[8]
+
+		# Make sure neighborhoods knows where displaced entries are
+		assert hd._nbhds[0] & 1 << 7
+		assert hd._nbhds[0] & 1 << 5
+		assert hd._nbhds[2] & 1 << 1
 
 @pytest.mark.parametrize("scenario", ["no_space", "last_none", "last_distant"],
 	ids = ["no_space", "last-index-no-neighbors", "last-index-distant-neighbors"])
@@ -132,17 +173,6 @@ def test_invalid_free_up(scenario):
 
 		with pytest.raises(Exception):
 			hd._free_up(1)
-
-def test_unnecessary_free_up():
-	hd = HopscotchDict()
-
-	for i in range(2,7):
-		hd[i] = "test_unnecessary_free_up_{}".format(i)
-
-	hd._free_up(0)
-
-	assert hd._indices[0] == hd.FREE_ENTRY
-	assert not hd._nbhds[0]
 
 @pytest.mark.parametrize("with_collisions", [True, False],
 	ids = ["with-collisions", "no-collisions"])

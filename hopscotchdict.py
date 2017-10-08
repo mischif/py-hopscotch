@@ -96,30 +96,42 @@ class HopscotchDict(MutableMapping):
 
 		:param idx: The index in _indices to open up
 		"""
-		act_idx = idx
+
+		# Attempting to free up an index that currently points nowhere should
+		# be a no-op
+		if self._indices[idx] == self.FREE_ENTRY:
+			return
+
+		# Start searching for an open index from where the key in idx is
+		# supposed to hash to in case the key is displaced and what originally
+		# displaced it has been removed; if the key is not displaced
+		# orig_idx == idx anyway
+		orig_idx = self._hashes[self._indices[idx]] % self._size
+		act_idx = orig_idx
+
 		while act_idx < self._size:
 
 			if self._indices[act_idx] != self.FREE_ENTRY:
 				act_idx += 1
 				continue
 
-			# Attempting to free up an index that currently points nowhere should
-			# be a no-op
-			elif act_idx == idx:
-				return
-
-			# If there is an open index in the given index's neighborhood,
-			# move the pointer in the given index to the open index and update
-			# the given index's neighborhood
-			elif act_idx - idx < self._nbhd_size:
+			# If there is an opening available in the neighborhood of the index 
+			# the key in idx originally hashed to, move the pointer in the given
+			# index to the open index and update the appropriate neighborhoods
+			elif act_idx - orig_idx < self._nbhd_size:
 				# idx is the index to open up
 				# orig_idx is the index the key in self._indices[idx] is
 				# supposed to hash to
 				# act_idx is the open index
-				orig_idx = self._hashes[self._indices[idx]] % self._size
+				
 				self._indices[act_idx] = self._indices[idx]
 				self._set_neighbor(orig_idx, act_idx - orig_idx)
 				self._indices[idx] = self.FREE_ENTRY
+
+				# If the key in idx is not displaced, there could be no neighbor
+				# displaced from orig_idx at idx - orig_idx so it would be okay
+				# to clear it; if the key is displaced, there could be no
+				# neighbor of idx at idx and would likewise be okay to clear
 				self._clear_neighbor(idx, 0)
 				self._clear_neighbor(orig_idx, idx - orig_idx)
 				return
@@ -127,7 +139,7 @@ class HopscotchDict(MutableMapping):
 			# The open index is too far away, so find the closest index to the
 			# given index to free up and repeat until the given index is opened
 			else:
-				for i in range(max(idx, act_idx - self._nbhd_size) + 1, act_idx):
+				for i in range(max(orig_idx, act_idx - self._nbhd_size) + 1, act_idx):
 
 					# If the last index before the open index has no displaced
 					# neighbors or its closest one is after the open index,
