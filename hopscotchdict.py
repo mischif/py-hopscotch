@@ -256,9 +256,9 @@ class HopscotchDict(MutableMapping):
 				# _resize was called either because the dict was too dense or an
 				# item could not be added w/o violating an invariant; in the
 				# first case all invariants will still hold with even more space
-				# so the call to _free_op will succeed; in the second case the item
+				# so the call to _free_up will succeed; in the second case the item
 				# that triggered this resize has not yet been added to the dict and
-				# thus is equivalent the first case and the call will again succeed
+				# thus is equivalent to the first case and the call will again succeed
 				self._free_up(exp_idx)
 				self._indices[exp_idx] = data_idx
 				self._set_neighbor(exp_idx, 0)
@@ -272,7 +272,7 @@ class HopscotchDict(MutableMapping):
 		:param nbhd_idx: The neighbor in the neighborhood of idx to set occupied
 		"""
 		if nbhd_idx >= self._nbhd_size:
-			raise ValueError(u"Trying to clear neighbor outside neighborhood")
+			raise ValueError(u"Trying to set neighbor outside neighborhood")
 
 		self._nbhds[idx] |= (1 << self._nbhd_size - nbhd_idx - 1)
 
