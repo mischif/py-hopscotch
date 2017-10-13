@@ -226,7 +226,7 @@ def test_lookup(scenario):
 			hd._lookup(7)
 
 	elif scenario == "free":
-		hd[4] = "test_setitem"
+		hd[4] = "test_lookup"
 		hd._indices[4] = hd.FREE_ENTRY
 
 		with pytest.raises(RuntimeError):
@@ -356,7 +356,8 @@ def test_setitem(scenario):
 		assert len(hd) == 1000
 		for key in hd._keys:
 			i = int(key.split("_")[-1])
-			assert hd["test_setitem_{}".format(i)] == i
+			assert hd[key] == i
+			assert hd._lookup(key) in hd._get_displaced_neighbors(abs(hash(key)) % hd._size)
 
 	elif scenario == "overwrite":
 		hd["test_setitem"] = False
@@ -427,20 +428,35 @@ def test_delitem(scenario):
 	hd = HopscotchDict()
 
 	if scenario == "found":
-		for i in sample(range(10000), 6):
-			hd["test_delitem_{}".format(i)] = i
+		for i in range(1, 7):
+			hd[i] = "test_delitem_{}".format(i)
 
-		assert len(hd) == len(hd._keys)
+		for key in hd._keys:
+			assert hd._indices[hd._lookup(key)] == key - 1
 
-		keys = copy(hd._keys)
+		del hd[6]
 
-		for key in keys:
+		for key in hd._keys:
+			assert hd._indices[hd._lookup(key)] == key - 1
+
+		del hd[2]
+
+		assert hd._indices[hd._lookup(1)] == 0
+		assert hd._indices[hd._lookup(3)] == 2
+		assert hd._indices[hd._lookup(4)] == 3
+		assert hd._indices[hd._lookup(5)] == 1
+
+		del hd[3]
+
+		assert hd._indices[hd._lookup(1)] == 0
+		assert hd._indices[hd._lookup(4)] == 2
+		assert hd._indices[hd._lookup(5)] == 1
+
+		for key in copy(hd._keys):
 			del hd[key]
 
 		assert len(hd) == 0
-
-		for i in range(hd._size):
-			assert hd._indices[i] == hd.FREE_ENTRY
+		assert max(hd._indices) == hd.FREE_ENTRY
 
 	elif scenario == "missing":
 		with pytest.raises(KeyError):
