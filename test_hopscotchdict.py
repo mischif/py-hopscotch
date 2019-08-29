@@ -4,6 +4,9 @@ from hopscotchdict import HopscotchDict
 
 from copy import copy
 from random import randint, sample
+from sys import version_info
+
+oldpython = pytest.mark.skipif(version_info.major > 2, reason="Requires Python 2.7 to test")
 
 @pytest.mark.parametrize("log_array_size", [4, 8, 16],
 	ids = ["small-array", "medium-array", "large-array"])
@@ -533,37 +536,103 @@ def test_eq_and_neq(scenario):
 		assert hd == dc
 
 
-def test_items_and_iteritems():
+def test_keys():
+	test_input = [("test_keys_{}".format(i), i) for i in sample(range(10000), 100)]
+
 	hd = HopscotchDict()
 
-	for i in sample(range(10000), 100):
-		hd["test_items_and_iteritems_{}".format(i)] = i
-
-	for (k, v) in hd.iteritems():
-		assert k in hd
-		assert hd[k] == v
-
-
-def test_keys_and_iterkeys():
-	hd = HopscotchDict()
-
-	for i in sample(range(10000), 100):
-		hd["test_keys_and_iterkeys_{}".format(i)] = i
+	for (k, v) in test_input:
+		hd[k] = v
 
 	keys = hd.keys()
-	for key in hd.iterkeys():
-		assert key in keys
+	if version_info.major < 3:
+		assert isinstance(keys, list)
+	else:
+		keys = list(keys)
+
+	for (k, v) in test_input:
+		assert k in keys
 
 
-def test_values_and_itervalues():
+def test_values():
+	test_input = [("test_values_{}".format(i), i) for i in sample(range(10000), 100)]
+
 	hd = HopscotchDict()
 
-	for i in sample(range(10000), 100):
-		hd["test_values_and_itervalues_{}".format(i)] = i
+	for (k, v) in test_input:
+		hd[k] = v
 
 	vals = hd.values()
-	for val in hd.itervalues():
-		assert val in vals
+	if version_info.major < 3:
+		assert isinstance(vals, list)
+	else:
+		vals = list(vals)
+
+	for (k, v) in test_input:
+		assert v in vals
+
+
+def test_items():
+	test_input = [("test_items_{}".format(i), i) for i in sample(range(10000), 100)]
+
+	hd = HopscotchDict()
+
+	for (k, v) in test_input:
+		hd[k] = v
+
+	items = hd.items()
+	if version_info.major < 3:
+		assert isinstance(items, list)
+	else:
+		items = list(items)
+
+	for item_tuple in test_input:
+		assert item_tuple in items
+
+
+@oldpython
+def test_iterkeys():
+	test_input = [("test_iterkeys_{}".format(i), i) for i in sample(range(10000), 100)]
+
+	hd = HopscotchDict()
+
+	for (k, v) in test_input:
+		hd[k] = v
+
+	keys = hd.keys()
+
+	for k in hd.iterkeys():
+		assert k in keys
+
+
+@oldpython
+def test_itervalues():
+	test_input = [("test_itervalues_{}".format(i), i) for i in sample(range(10000), 100)]
+
+	hd = HopscotchDict()
+
+	for (k, v) in test_input:
+		hd[k] = v
+
+	vals = hd.values()
+
+	for v in hd.itervalues():
+		assert v in vals
+
+
+@oldpython
+def test_iteritems():
+	test_input = [("test_items_{}".format(i), i) for i in sample(range(10000), 100)]
+
+	hd = HopscotchDict()
+
+	for (k, v) in test_input:
+		hd[k] = v
+
+	items = hd.items()
+
+	for (k, v) in hd.iteritems():
+		assert (k, v) in items
 
 
 def test_reversed():
@@ -573,6 +642,9 @@ def test_reversed():
 		hd["test_reversed_{}".format(i)] = i
 
 	keys = hd.keys()
+	if not isinstance(keys, list):
+		keys = list(keys)
+
 	rev_keys = list(reversed(hd))
 
 	assert len(keys) == len(rev_keys)

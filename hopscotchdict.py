@@ -10,16 +10,15 @@
 from __future__ import division
 from array import array
 from copy import copy
-from collections import MutableMapping
-from sys import maxsize
+from sys import maxsize, version_info
 
-# Import the backported versions of zip that acts like izip and map that acts like imap
-# Will fail for < 2.6 (which isn't supported)
-# and > 3.0 (where it's built in)
-try:
+# future_builtins import will fail for < 2.6 (which isn't supported)
+if version_info.major < 3:
 	from future_builtins import zip, map
-except ImportError:
-	pass
+	from collections import MutableMapping
+else:
+	from collections.abc import MutableMapping
+
 
 class HopscotchDict(MutableMapping):
 
@@ -27,7 +26,7 @@ class HopscotchDict(MutableMapping):
 # instances of HopscotchDict are used at once
 # (Only true on 3.x, as 2.x creates __dict__ regardless)
 	__slots__ = ("_count", "_hashes", "_indices", "_keys", "_nbhds", "_nbhd_size",
-							 "_size", "_values")
+				 "_size", "_values")
 
 	# Python ints are signed, add one to get word length
 	MAX_NBHD_SIZE = maxsize.bit_length() + 1
@@ -345,45 +344,29 @@ class HopscotchDict(MutableMapping):
 		"""
 		return self.__contains__(key)
 
+	def keys(self):
+		"""
+		An iterator over all keys in the dict
+
+		:returns: An iterator over self._keys
+		"""
+		return iter(self._keys)
+
+	def values(self):
+		"""
+		An iterator over all values in the dict
+
+		:returns: An iterator over self._values
+		"""
+		return iter(self._values)
+
 	def items(self):
 		"""
-		Return an iterator over the `(key, value)` pairs; see iteritems()
+		An iterator over all `(key, value)` pairs
 
 		:returns: An iterator over the `(key, value)` pairs
 		"""
 		return zip(self._keys, self._values)
-
-	def iteritems(self):
-		"""
-		Return an iterator over the `(key, value)` pairs; see items()
-
-		:returns: An iterator over the `(key, value)` pairs
-		"""
-		return self.items()
-
-	def iterkeys(self):
-		"""
-		An iterator over the keys
-
-		:returns: An iterator over the keys
-		"""
-		return self.__iter__()
-
-	def itervalues(self):
-		"""
-		An iterator over the values
-
-		:returns: An iterator over the values
-		"""
-		return iter(self._values)
-
-	def keys(self):
-		"""
-		A list of the keys
-
-		:returns: A list of the keys
-		"""
-		return self._keys
 
 	def pop(self, key, default=None):
 		"""
@@ -439,14 +422,6 @@ class HopscotchDict(MutableMapping):
 			self.__setitem__(key, default)
 			return default
 
-	def values(self):
-		"""
-		Return a list of the values 
-
-		:returns: a list of the values
-		"""
-		return self._values
-
 	def __init__(self, *args, **kwargs):
 		"""
 		Create a new instance with any specified values
@@ -454,6 +429,17 @@ class HopscotchDict(MutableMapping):
 		# Use clear function to do initial setup for new tables
 		if not hasattr(self, "_size"):
 			self.clear()
+
+		# Since this code expects to be run in Python 3 by default,
+		# Handle Python 2 API expectations explicitly
+		if version_info.major < 3:
+			self.iterkeys = self.keys
+			self.itervalues = self.values
+			self.iteritems = self.items
+
+			self.keys = lambda: self._keys
+			self.values = lambda: self._values
+			self.items = lambda: [(k, v) for (k, v) in self.iteritems()]
 
 		self.update(*args, **kwargs)
 
@@ -666,5 +652,6 @@ class HopscotchDict(MutableMapping):
 
 		:returns: A string containing all items in the dict
 		"""
+		item_func = getattr(self, 'iteritems', self.items)
 		return u"{{{0}}}".format(
-			u", ".join(u"'{0!s}': {1!s}".format(*i) for i in self.iteritems()))
+			u", ".join(u"'{0!s}': {1!s}".format(*i) for i in item_func()))
