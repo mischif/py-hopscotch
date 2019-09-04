@@ -3,13 +3,12 @@
 ################################################################################
 #                              py-hopscotch-dict                               #
 #    Full-featured `dict` replacement with guaranteed constant-time lookups    #
-#                               (C) 2017 Mischif                               #
+#                            (C) 2017, 2019 Mischif                            #
 #       Released under version 3.0 of the Non-Profit Open Source License       #
 ################################################################################
 
 from __future__ import division
 from array import array
-from copy import copy
 from sys import maxsize, version_info
 
 # future_builtins import will fail for < 2.6 (which isn't supported)
@@ -312,7 +311,7 @@ class HopscotchDict(MutableMapping):
 		out = HopscotchDict()
 
 		for key in self._keys:
-			out[key] = copy(self.__getitem__(key))
+			out[key] = self.__getitem__(key)
 
 		return out
 
@@ -636,7 +635,7 @@ class HopscotchDict(MutableMapping):
 
 		:returns: A string that could be used to create an equivalent representation
 		"""
-		return u"HopscotchDict({0!r})".format(list(self.items()))
+		return u"HopscotchDict({0})".format(self.__str__())
 
 	def __reversed__(self):
 		"""
@@ -652,6 +651,9 @@ class HopscotchDict(MutableMapping):
 
 		:returns: A string containing all items in the dict
 		"""
-		item_func = getattr(self, 'iteritems', self.items)
-		return u"{{{0}}}".format(
-			u", ".join(u"'{0!s}': {1!s}".format(*i) for i in item_func()))
+		stringified = []
+
+		for (key, val) in getattr(self, 'iteritems', self.items)():
+			stringified.append(u"{0!r}: {1!r}".format(key, val))
+
+		return u"{{{0}}}".format(u", ".join(stringified))

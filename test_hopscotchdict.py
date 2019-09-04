@@ -6,25 +6,35 @@ from copy import copy
 from random import randint, sample
 from sys import version_info
 
+from hypothesis import example, given
+from hypothesis.strategies import booleans, complex_numbers, deferred, dictionaries, floats, frozensets, lists, integers, none, one_of, text, tuples
+
+
 oldpython = pytest.mark.skipif(version_info.major > 2, reason="Requires Python 2.7 to test")
 
-@pytest.mark.parametrize("log_array_size", [4, 8, 16],
-	ids = ["small-array", "medium-array", "large-array"])
-def test_make_indices(log_array_size):
-	if log_array_size <= 7:
+dict_keys = deferred(lambda: one_of(none(), booleans(), integers(), floats(allow_infinity=False, allow_nan=False), complex_numbers(allow_infinity=False, allow_nan=False), text(), tuples(dict_keys), frozensets(dict_keys)))
+
+dict_values = deferred(lambda: one_of(dict_keys, lists(dict_keys), dictionaries(dict_keys, dict_values)))
+
+sample_dict = dictionaries(dict_keys, dict_values)
+
+
+@given(integers(min_value=8, max_value=2**20))
+def test_make_indices(array_size):
+	if array_size <= 2**7:
 		expected_bit_length = 8
-	elif log_array_size <= 15:
+	elif array_size <= 2**15:
 		expected_bit_length = 16
-	elif log_array_size <= 31:
+	elif array_size <= 2**31:
 		expected_bit_length = 32
-	elif log_array_size <= 63:
+	elif array_size <= 2**63:
 		expected_bit_length = 64
 
-	indices = HopscotchDict._make_indices(2 ** log_array_size)
+	indices = HopscotchDict._make_indices(array_size)
 
-	assert len(indices) == 2 ** log_array_size
+	assert len(indices) == array_size
 	assert indices.itemsize == expected_bit_length / 8
-	assert indices[0] == -1
+	assert all(map(lambda i: i == -1, indices))
 
 
 @pytest.mark.parametrize("nbhd_size", [8, 16, 32, 64],
@@ -39,6 +49,7 @@ def test_make_nbhds(nbhd_size):
 		nbhds[0] = 2 ** nbhd_size
 
 	nbhds[0] = 2 ** nbhd_size - 1
+
 
 @pytest.mark.parametrize("out_of_bounds_neighbor", [True, False],
 	ids = ["outside-neighborhood", "inside-neighborhood"])
@@ -142,6 +153,7 @@ def test_valid_free_up(scenario):
 		assert hd._nbhds[0] & 1 << 5
 		assert hd._nbhds[2] & 1 << 1
 
+
 @pytest.mark.parametrize("scenario", ["no_space", "last_none", "last_distant"],
 	ids = ["no_space", "last-index-no-neighbors", "last-index-distant-neighbors"])
 def test_invalid_free_up(scenario):
@@ -177,6 +189,7 @@ def test_invalid_free_up(scenario):
 		with pytest.raises(RuntimeError):
 			hd._free_up(1)
 
+
 @pytest.mark.parametrize("with_collisions", [True, False],
 	ids = ["with-collisions", "no-collisions"])
 def test_get_displaced_neighbors(with_collisions):
@@ -203,18 +216,23 @@ def test_get_displaced_neighbors(with_collisions):
 		for i in range(6):
 			assert hd._get_displaced_neighbors(i) == [i]
 
-@pytest.mark.parametrize("scenario", ["missing", "found", "displaced", "outside", "free"],
-	ids = ["missing-key", "found-key", "displaced-key", "neighbor-outside-array", "neighbor-previously-freed"])
-def test_lookup(scenario):
+
+@given(dict_keys)
+def test_lookup(key):
+	hd = HopscotchDict()
+
+	idx = abs(hash(key)) % hd._size
+	hd[key] = True
+	assert hd._lookup(key) == idx
+
+
+@pytest.mark.parametrize("scenario", ["missing", "displaced", "outside", "free"],
+	ids = ["missing-key", "displaced-key", "neighbor-outside-array", "neighbor-previously-freed"])
+def test_lookup_fails(scenario):
 	hd = HopscotchDict()
 
 	if scenario == "missing":
 		assert hd._lookup("test_lookup") == None
-
-	elif scenario == "found":
-		idx = abs(hash("test_lookup")) % hd._size
-		hd["test_lookup"] = True
-		assert hd._lookup("test_lookup") == idx
 
 	elif scenario == "displaced":
 		hd[3] = True
@@ -234,6 +252,7 @@ def test_lookup(scenario):
 
 		with pytest.raises(RuntimeError):
 			hd._lookup(4)
+
 
 @pytest.mark.parametrize("scenario",
 	["bad_size", "too_large", "nbhd_inc", "rsz_col"],
@@ -313,23 +332,23 @@ def test_clear():
 	assert len(set(hd._nbhds)) == 1
 
 
-@pytest.mark.parametrize("creation_args", ["none", "list", "dict"],
-	ids = ["no-creation-args", "creation-list", "creation-dict"])
-def test_init(creation_args):
-	keys = ("test_key_1", "test_key_2", "test_key_3", "test_key_4", "test_key_5")
-	vals = (1, 2, 3, 4, 5)
+def test_bare_init():
+	hd = HopscotchDict()
+	assert len(hd) == 0
 
-	if creation_args == "none":
-		hd = HopscotchDict()
-	if creation_args == "list":
-		hd = HopscotchDict(zip(keys, vals))
-	if creation_args == "dict":
-		hd = HopscotchDict(dict(zip(keys, vals)))
 
-	if creation_args == "none":
-		assert len(hd) == 0
-	else:
-		assert len(hd) == 5
+@given(sample_dict)
+def test_list_init(gen_dict):
+	items = list(gen_dict.items())
+	size = len(gen_dict)
+	hd = HopscotchDict(items)
+	assert len(hd) == size
+
+
+@given(sample_dict)
+def test_dict_init(gen_dict):
+	hd = HopscotchDict(gen_dict)
+	assert len(hd) == len(gen_dict)
 
 
 @pytest.mark.parametrize("valid_key", [True, False],
@@ -345,24 +364,28 @@ def test_getitem(valid_key):
 			assert hd["test_getitem"]
 
 
-@pytest.mark.parametrize("scenario",
-	["insert", "overwrite", "density_resize", "snr", "bnr", "ovw_err", "ins_err"],
-	ids = ["insert", "overwrite", "density-resize", "small-nbhd-resize",
-		   "big-nbhd-resize", "overwrite-error", "insert-error"])
-def test_setitem(scenario):
+@given(sample_dict)
+def test_setitem_happy_path(gen_dict):
 	hd = HopscotchDict()
 
-	if scenario == "insert":
-		for i in sample(range(10000), 1000):
-			hd["test_setitem_{}".format(i)] = i
+	for (k, v) in gen_dict.items():
+		hd[k] = v
 
-		assert len(hd) == 1000
-		for key in hd._keys:
-			i = int(key.split("_")[-1])
-			assert hd[key] == i
-			assert hd._lookup(key) in hd._get_displaced_neighbors(abs(hash(key)) % hd._size)
+	assert len(hd) == len(gen_dict)
 
-	elif scenario == "overwrite":
+	for key in gen_dict:
+		assert hd[key] == gen_dict[key]
+		assert hd._lookup(key) in hd._get_displaced_neighbors(abs(hash(key)) % hd._size)
+
+
+@pytest.mark.parametrize("scenario",
+	["overwrite", "density_resize", "snr", "bnr", "ovw_err", "ins_err"],
+	ids = ["overwrite", "density-resize", "small-nbhd-resize",
+		   "big-nbhd-resize", "overwrite-error", "insert-error"])
+def test_setitem_special_cases(scenario):
+	hd = HopscotchDict()
+
+	if scenario == "overwrite":
 		hd["test_setitem"] = False
 		hd["test_setitem"] = True
 		assert len(hd) == 1
@@ -466,40 +489,32 @@ def test_delitem(scenario):
 			del hd["test_delitem"]
 
 
-@pytest.mark.parametrize("valid_key", [True, False],
-	ids = ["valid-key", "invalid-key"])
-def test_contains_and_has_key(valid_key):
-	hd = HopscotchDict()
-
-	for i in sample(range(10000), 1000):
-		hd["test_contains_{}".format(i)] = i
+@given(sample_dict)
+def test_contains_and_has_key(gen_dict):
+	hd = HopscotchDict(gen_dict)
 
 	for key in hd._keys:
 		assert key in hd
 
-	if not valid_key:
-		assert "test_contains" not in hd
-		assert not hd.has_key("test_contains")
+	assert "test_contains" not in hd
+	assert not hd.has_key("test_contains")
 
-def test_iter_and_len():
-	hd = HopscotchDict()
+
+@given(sample_dict)
+def test_iter_and_len(gen_dict):
+	hd = HopscotchDict(gen_dict)
 
 	count = 0
-	limit = randint(1, 10000)
-	for i in sample(range(10000), limit):
-		hd["test_iter_{}".format(i)] = i
 
 	for key in hd:
 		count += 1
 
-	assert count == limit == len(hd)
+	assert count == len(hd) == len(gen_dict)
 
 
-def test_repr():
-	hd = HopscotchDict()
-
-	for i in sample(range(10000), 100):
-		hd["test_repr_{}".format(i)] = i
+@given(sample_dict)
+def test_repr(gen_dict):
+	hd = HopscotchDict(gen_dict)
 
 	assert eval(repr(hd)) == hd
 
@@ -536,13 +551,9 @@ def test_eq_and_neq(scenario):
 		assert hd == dc
 
 
-def test_keys():
-	test_input = [("test_keys_{}".format(i), i) for i in sample(range(10000), 100)]
-
-	hd = HopscotchDict()
-
-	for (k, v) in test_input:
-		hd[k] = v
+@given(sample_dict)
+def test_keys(gen_dict):
+	hd = HopscotchDict(gen_dict)
 
 	keys = hd.keys()
 	if version_info.major < 3:
@@ -550,17 +561,13 @@ def test_keys():
 	else:
 		keys = list(keys)
 
-	for (k, v) in test_input:
-		assert k in keys
+	for key in gen_dict:
+		assert key in keys
 
 
-def test_values():
-	test_input = [("test_values_{}".format(i), i) for i in sample(range(10000), 100)]
-
-	hd = HopscotchDict()
-
-	for (k, v) in test_input:
-		hd[k] = v
+@given(sample_dict)
+def test_values(gen_dict):
+	hd = HopscotchDict(gen_dict)
 
 	vals = hd.values()
 	if version_info.major < 3:
@@ -568,17 +575,13 @@ def test_values():
 	else:
 		vals = list(vals)
 
-	for (k, v) in test_input:
-		assert v in vals
+	for key in gen_dict:
+		assert gen_dict[key] in vals
 
 
-def test_items():
-	test_input = [("test_items_{}".format(i), i) for i in sample(range(10000), 100)]
-
-	hd = HopscotchDict()
-
-	for (k, v) in test_input:
-		hd[k] = v
+@given(sample_dict)
+def test_items(gen_dict):
+	hd = HopscotchDict(gen_dict)
 
 	items = hd.items()
 	if version_info.major < 3:
@@ -586,18 +589,14 @@ def test_items():
 	else:
 		items = list(items)
 
-	for item_tuple in test_input:
+	for item_tuple in gen_dict.items():
 		assert item_tuple in items
 
 
 @oldpython
-def test_iterkeys():
-	test_input = [("test_iterkeys_{}".format(i), i) for i in sample(range(10000), 100)]
-
-	hd = HopscotchDict()
-
-	for (k, v) in test_input:
-		hd[k] = v
+@given(sample_dict)
+def test_iterkeys(gen_dict):
+	hd = HopscotchDict(gen_dict)
 
 	keys = hd.keys()
 
@@ -606,13 +605,9 @@ def test_iterkeys():
 
 
 @oldpython
-def test_itervalues():
-	test_input = [("test_itervalues_{}".format(i), i) for i in sample(range(10000), 100)]
-
-	hd = HopscotchDict()
-
-	for (k, v) in test_input:
-		hd[k] = v
+@given(sample_dict)
+def test_itervalues(gen_dict):
+	hd = HopscotchDict(gen_dict)
 
 	vals = hd.values()
 
@@ -621,13 +616,9 @@ def test_itervalues():
 
 
 @oldpython
-def test_iteritems():
-	test_input = [("test_items_{}".format(i), i) for i in sample(range(10000), 100)]
-
-	hd = HopscotchDict()
-
-	for (k, v) in test_input:
-		hd[k] = v
+@given(sample_dict)
+def test_iteritems(gen_dict):
+	hd = HopscotchDict(gen_dict)
 
 	items = hd.items()
 
@@ -635,11 +626,9 @@ def test_iteritems():
 		assert (k, v) in items
 
 
-def test_reversed():
-	hd = HopscotchDict()
-
-	for i in sample(range(10000), 100):
-		hd["test_reversed_{}".format(i)] = i
+@given(sample_dict)
+def test_reversed(gen_dict):
+	hd = HopscotchDict(gen_dict)
 
 	keys = hd.keys()
 	if not isinstance(keys, list):
@@ -682,25 +671,26 @@ def test_pop(scenario):
 		with pytest.raises(KeyError):
 			hd.pop("test_pop")
 
-@pytest.mark.parametrize("empty_dict", [True, False],
-	ids = ["empty-dict", "nonempty-dict"])
-def test_popitem(empty_dict):
+
+@given(sample_dict)
+@example({})
+def test_popitem(gen_dict):
 	hd = HopscotchDict()
 
-	if empty_dict:
+	if not gen_dict:
 		with pytest.raises(KeyError):
 			hd.popitem()
 	else:
-		for i in sample(range(10000), 100):
-			hd["test_popitem_{}".format(i)] = i
+		hd.update(gen_dict)
 
 		key = hd._keys[-1]
 		val = hd._values[-1]
 
-		assert len(hd) == 100
+		cur_len = len(hd)
 		assert (key, val) == hd.popitem()
-		assert len(hd) == 99
+		assert len(hd) == cur_len - 1
 		assert key not in hd
+
 
 @pytest.mark.parametrize("existing_key", [True, False],
 	ids = ["no-use-default", "use-default"])
@@ -716,22 +706,18 @@ def test_setdefault(existing_key):
 	assert hd.setdefault("test_setdefault", 1017) == val
 
 
-def test_copy():
-	hd = HopscotchDict()
-
-	for i in sample(range(10000), 100):
-		hd["test_copy_{}".format(i)] = i
+@given(sample_dict)
+def test_copy(gen_dict):
+	hd = HopscotchDict(gen_dict)
 
 	hdc = hd.copy()
 
 	for key in hd._keys:
 		assert id(hd[key]) == id(hdc[key])
 
-def test_str():
-	hd = HopscotchDict()
-	res = "{'test_str_0': 0, 'test_str_1': 1, 'test_str_2': 2, 'test_str_3': 3, 'test_str_4': 4}"
 
-	for i in range(5):
-		hd["test_str_{}".format(i)] = i
+@given(sample_dict)
+def test_str(gen_dict):
+	hd = HopscotchDict(gen_dict)
 
-	assert str(hd) == res
+	assert str(hd) == str(gen_dict)

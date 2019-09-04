@@ -11,7 +11,7 @@ python:
     - "pypy"
     - "pypy3"
 
-install: "pip install pytest-cov"
+install: "pip install hypothesis pytest-cov"
 
 script: py.test --cov=./
 
