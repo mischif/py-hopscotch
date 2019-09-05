@@ -11,7 +11,7 @@ from hypothesis import example, given, HealthCheck, settings
 from hypothesis.strategies import booleans, complex_numbers, deferred, dictionaries, floats, frozensets, lists, integers, none, one_of, text, tuples
 
 
-settings.register_profile("ci", database=None, deadline=300, max_examples=1000, suppress_health_check=[HealthCheck.too_slow])
+settings.register_profile("ci", database=None, deadline=300, suppress_health_check=[HealthCheck.too_slow])
 settings.load_profile(getenv(u"HYPOTHESIS_PROFILE", "default"))
 
 oldpython = pytest.mark.skipif(version_info.major > 2, reason="Requires Python 2.7 to test")
