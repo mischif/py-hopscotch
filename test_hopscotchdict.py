@@ -16,7 +16,7 @@ dict_keys = deferred(lambda: one_of(none(), booleans(), integers(), floats(allow
 
 dict_values = deferred(lambda: one_of(dict_keys, lists(dict_keys), dictionaries(dict_keys, dict_values)))
 
-sample_dict = dictionaries(dict_keys, dict_values)
+sample_dict = dictionaries(dict_keys, dict_values, max_size=100)
 
 
 @settings(deadline=1000)
