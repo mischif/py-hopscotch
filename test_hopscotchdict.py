@@ -3,23 +3,26 @@ import pytest
 from hopscotchdict import HopscotchDict
 
 from copy import copy
+from os import getenv
 from random import randint, sample
 from sys import version_info
 
-from hypothesis import example, given, settings
+from hypothesis import example, given, HealthCheck, settings
 from hypothesis.strategies import booleans, complex_numbers, deferred, dictionaries, floats, frozensets, lists, integers, none, one_of, text, tuples
 
+
+settings.register_profile("ci", database=None, deadline=300, max_examples=1000, suppress_health_check=[HealthCheck.too_slow])
+settings.load_profile(getenv(u"HYPOTHESIS_PROFILE", "default"))
 
 oldpython = pytest.mark.skipif(version_info.major > 2, reason="Requires Python 2.7 to test")
 
 dict_keys = deferred(lambda: one_of(none(), booleans(), integers(), floats(allow_infinity=False, allow_nan=False), complex_numbers(allow_infinity=False, allow_nan=False), text(), tuples(dict_keys), frozensets(dict_keys)))
 
-dict_values = deferred(lambda: one_of(dict_keys, lists(dict_keys, max_size=3), dictionaries(dict_keys, dict_values, max_size=3)))
+dict_values = deferred(lambda: one_of(dict_keys, lists(dict_keys), sample_dict))
 
-sample_dict = dictionaries(dict_keys, dict_values, max_size=100)
+sample_dict = dictionaries(dict_keys, dict_values)
 
 
-@settings(deadline=1000)
 @given(integers(min_value=8, max_value=2**20))
 def test_make_indices(array_size):
 	if array_size <= 2**7:
