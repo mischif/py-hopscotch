@@ -3,10 +3,11 @@ import pytest
 from hopscotchdict import HopscotchDict
 
 from copy import copy
+from datetime import timedelta
 from random import randint, sample
 from sys import version_info
 
-from hypothesis import example, given
+from hypothesis import example, given, settings
 from hypothesis.strategies import booleans, complex_numbers, deferred, dictionaries, floats, frozensets, lists, integers, none, one_of, text, tuples
 
 
@@ -19,6 +20,7 @@ dict_values = deferred(lambda: one_of(dict_keys, lists(dict_keys), dictionaries(
 sample_dict = dictionaries(dict_keys, dict_values)
 
 
+@settings(deadline=timedelta(seconds=1))
 @given(integers(min_value=8, max_value=2**20))
 def test_make_indices(array_size):
 	if array_size <= 2**7:
