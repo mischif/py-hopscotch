@@ -3,7 +3,6 @@ import pytest
 from hopscotchdict import HopscotchDict
 
 from copy import copy
-from datetime import timedelta
 from random import randint, sample
 from sys import version_info
 
@@ -20,7 +19,7 @@ dict_values = deferred(lambda: one_of(dict_keys, lists(dict_keys), dictionaries(
 sample_dict = dictionaries(dict_keys, dict_values)
 
 
-@settings(deadline=timedelta(seconds=1))
+@settings(deadline=1000)
 @given(integers(min_value=8, max_value=2**20))
 def test_make_indices(array_size):
 	if array_size <= 2**7:
