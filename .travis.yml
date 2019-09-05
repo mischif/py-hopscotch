@@ -13,9 +13,9 @@ python:
     - "pypy"
     - "pypy3"
 
-install: "pip install hypothesis hypothesis-pytest pytest-cov"
+install: "pip install codecov hypothesis hypothesis-pytest pytest-cov"
 
 script: py.test --cov=./
 
 after_success:
-    - bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
+    - codecov
