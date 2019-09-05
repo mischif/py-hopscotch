@@ -14,7 +14,7 @@ oldpython = pytest.mark.skipif(version_info.major > 2, reason="Requires Python 2
 
 dict_keys = deferred(lambda: one_of(none(), booleans(), integers(), floats(allow_infinity=False, allow_nan=False), complex_numbers(allow_infinity=False, allow_nan=False), text(), tuples(dict_keys), frozensets(dict_keys)))
 
-dict_values = deferred(lambda: one_of(dict_keys, lists(dict_keys), dictionaries(dict_keys, dict_values)))
+dict_values = deferred(lambda: one_of(dict_keys, lists(dict_keys, max_size=3), dictionaries(dict_keys, dict_values, max_size=3)))
 
 sample_dict = dictionaries(dict_keys, dict_values, max_size=100)
 
