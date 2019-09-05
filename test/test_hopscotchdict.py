@@ -1,26 +1,22 @@
-import pytest
+# encoding: utf-8
 
-from hopscotchdict import HopscotchDict
+################################################################################
+#                              py-hopscotch-dict                               #
+#    Full-featured `dict` replacement with guaranteed constant-time lookups    #
+#                            (C) 2017, 2019 Mischif                            #
+#       Released under version 3.0 of the Non-Profit Open Source License       #
+################################################################################
 
 from copy import copy
-from os import getenv
-from random import randint, sample
 from sys import version_info
 
-from hypothesis import example, given, HealthCheck, settings
-from hypothesis.strategies import booleans, complex_numbers, deferred, dictionaries, floats, frozensets, lists, integers, none, one_of, text, tuples
+import pytest
 
+from hypothesis import example, given
+from hypothesis.strategies import integers
 
-settings.register_profile("ci", database=None, deadline=300, suppress_health_check=[HealthCheck.too_slow])
-settings.load_profile(getenv(u"HYPOTHESIS_PROFILE", "default"))
-
-oldpython = pytest.mark.skipif(version_info.major > 2, reason="Requires Python 2.7 to test")
-
-dict_keys = deferred(lambda: one_of(none(), booleans(), integers(), floats(allow_infinity=False, allow_nan=False), complex_numbers(allow_infinity=False, allow_nan=False), text(), tuples(dict_keys), frozensets(dict_keys)))
-
-dict_values = deferred(lambda: one_of(dict_keys, lists(dict_keys), sample_dict))
-
-sample_dict = dictionaries(dict_keys, dict_values)
+from hopscotchdict.hopscotchdict import HopscotchDict
+from test import dict_keys, sample_dict
 
 
 @given(integers(min_value=8, max_value=2**20))
@@ -595,39 +591,6 @@ def test_items(gen_dict):
 
 	for item_tuple in gen_dict.items():
 		assert item_tuple in items
-
-
-@oldpython
-@given(sample_dict)
-def test_iterkeys(gen_dict):
-	hd = HopscotchDict(gen_dict)
-
-	keys = hd.keys()
-
-	for k in hd.iterkeys():
-		assert k in keys
-
-
-@oldpython
-@given(sample_dict)
-def test_itervalues(gen_dict):
-	hd = HopscotchDict(gen_dict)
-
-	vals = hd.values()
-
-	for v in hd.itervalues():
-		assert v in vals
-
-
-@oldpython
-@given(sample_dict)
-def test_iteritems(gen_dict):
-	hd = HopscotchDict(gen_dict)
-
-	items = hd.items()
-
-	for (k, v) in hd.iteritems():
-		assert (k, v) in items
 
 
 @given(sample_dict)

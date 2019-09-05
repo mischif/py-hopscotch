@@ -2,9 +2,6 @@ language: python
 
 sudo: false
 
-env:
-    - HYPOTHESIS_PROFILE=ci
-
 python:
     - "2.7"
     - "3.4"
@@ -13,9 +10,9 @@ python:
     - "pypy"
     - "pypy3"
 
-install: "pip install codecov hypothesis hypothesis-pytest pytest-cov"
+install: "pip install .[test]"
 
-script: py.test --cov=./
+script: make ci-test
 
 after_success:
-    - codecov
+    - codecov -X gcov
