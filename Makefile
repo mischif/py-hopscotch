@@ -10,7 +10,7 @@ COV_OPTIONS="--cov=hopscotchdict --cov-report xml --cov-report term-missing --co
 .PHONY: test ci-test build
 
 clean:
-	rm -rf .coverage coverage.xml .eggs/ .hypothesis/ .pytest_cache/ *egg-info/
+	rm -rf .coverage coverage.xml .eggs/ .hypothesis/ .pytest_cache/ *egg-info/ dist/ build/
 	find . -name __pycache__ -exec rm -rf {} +
 	find . -name *.pyc -exec rm -rf {} +
 

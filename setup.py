@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 ################################################################################
 #                              py-hopscotch-dict                               #
 #    Full-featured `dict` replacement with guaranteed constant-time lookups    #
@@ -22,15 +24,27 @@ setup(
 
     packages=["hopscotchdict"],
 
-    description="A replacement for dict using hopscotch hashing.",
+    license="NPOSL-3.0",
+
+    url="https://github.com/mischif/py-hopscotch-dict",
+
+    description="A replacement for dict using hopscotch hashing",
 
     long_description=long_description,
     long_description_content_type="text/markdown",
 
-    url="https://github.com/mischif/py-hopscotch-dict",
-
     author="Jeremy Brown",
     author_email="mischif@users.noreply.github.com",
+
+    python_requires=">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, <4",
+
+    setup_requires=["pytest-runner"],
+
+    tests_require=["hypothesis", "hypothesis-pytest", "pytest", "pytest-cov"],
+
+    extras_require={
+        "test": ["codecov"],
+        },
 
     classifiers=[
 		"Development Status :: 5 - Production/Stable",
@@ -51,13 +65,4 @@ setup(
     	],
 
     keywords="hopscotch dict hashtable",
-
-    python_requires=">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, <4",
-
-    setup_requires=["pytest-runner"],
-    tests_require=["hypothesis", "hypothesis-pytest", "pytest", "pytest-cov"],
-
-    extras_require={
-        "test": ["codecov"],
-        },
     )
