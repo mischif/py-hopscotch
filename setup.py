@@ -7,20 +7,25 @@
 #       Released under version 3.0 of the Non-Profit Open Source License       #
 ################################################################################
 
-from setuptools import setup, find_packages
+from setuptools import setup
 from os import path
 from io import open
 
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
-with open(path.join(here, "README.md"), encoding="utf-8") as f:
-    long_description = f.read()
+with open(path.join(here, "README.md"), encoding="utf-8") as desc:
+    long_description = desc.read()
+
+# Get the package version
+with open(path.join(here, 'VERSION'), encoding="utf-8") as version_file:
+    package_version = version_file.read().strip()
+
 
 setup(
     name="py-hopscotch-dict-mischif",
 
-    version="1.0.0-rc.2",
+    version=package_version,
 
     packages=["hopscotchdict"],
 
@@ -37,6 +42,8 @@ setup(
     author_email="mischif@users.noreply.github.com",
 
     python_requires=">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, <4",
+
+	data_files=[("", ["VERSION"])],
 
     setup_requires=["pytest-runner"],
 
