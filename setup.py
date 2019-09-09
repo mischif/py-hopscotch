@@ -27,7 +27,7 @@ setup(
 
 	version=package_version,
 
-	packages=["hopscotchdict"],
+	packages=["py_hopscotch_dict"],
 
 	license="NPOSL-3.0",
 

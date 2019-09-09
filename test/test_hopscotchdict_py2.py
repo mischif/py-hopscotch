@@ -13,7 +13,7 @@ import pytest
 
 from hypothesis import given
 
-from hopscotchdict.hopscotchdict import HopscotchDict
+from py_hopscotch_dict import HopscotchDict
 from test import sample_dict
 
 

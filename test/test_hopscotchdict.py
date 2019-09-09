@@ -15,7 +15,7 @@ import pytest
 from hypothesis import example, given
 from hypothesis.strategies import integers
 
-from hopscotchdict.hopscotchdict import HopscotchDict
+from py_hopscotch_dict import HopscotchDict
 from test import dict_keys, sample_dict
 
 
