@@ -23,7 +23,7 @@ with open(path.join(here, 'VERSION'), encoding="utf-8") as version_file:
 
 
 setup(
-	name="py-hopscotch-dict-mischif",
+	name="py-hopscotch-dict",
 
 	version=package_version,
 
