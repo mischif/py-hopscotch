@@ -15,61 +15,61 @@ here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
 with open(path.join(here, "README.md"), encoding="utf-8") as desc:
-    long_description = desc.read()
+	long_description = desc.read()
 
 # Get the package version
 with open(path.join(here, 'VERSION'), encoding="utf-8") as version_file:
-    package_version = version_file.read().strip()
+	package_version = version_file.read().strip()
 
 
 setup(
-    name="py-hopscotch-dict-mischif",
+	name="py-hopscotch-dict-mischif",
 
-    version=package_version,
+	version=package_version,
 
-    packages=["hopscotchdict"],
+	packages=["hopscotchdict"],
 
-    license="NPOSL-3.0",
+	license="NPOSL-3.0",
 
-    url="https://github.com/mischif/py-hopscotch-dict",
+	url="https://github.com/mischif/py-hopscotch-dict",
 
-    description="A replacement for dict using hopscotch hashing",
+	description="A replacement for dict using hopscotch hashing",
 
-    long_description=long_description,
-    long_description_content_type="text/markdown",
+	long_description=long_description,
+	long_description_content_type="text/markdown",
 
-    author="Jeremy Brown",
-    author_email="mischif@users.noreply.github.com",
+	author="Jeremy Brown",
+	author_email="mischif@users.noreply.github.com",
 
-    python_requires=">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, <4",
+	python_requires=">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, <4",
 
 	data_files=[("", ["VERSION"])],
 
-    setup_requires=["pytest-runner"],
+	setup_requires=["pytest-runner"],
 
-    tests_require=["hypothesis", "hypothesis-pytest", "pytest", "pytest-cov"],
+	tests_require=["hypothesis", "hypothesis-pytest", "pytest", "pytest-cov"],
 
-    extras_require={
-        "test": ["codecov"],
-        },
+	extras_require={
+		"test": ["codecov"],
+		},
 
-    classifiers=[
+	classifiers=[
 		"Development Status :: 5 - Production/Stable",
 
-        "Intended Audience :: Developers",
-        "Topic :: Software Development :: Libraries :: Python Modules",
-        "Operating System :: OS Independent",
+		"Intended Audience :: Developers",
+		"Topic :: Software Development :: Libraries :: Python Modules",
+		"Operating System :: OS Independent",
 
-        "License :: OSI Approved :: Open Software License 3.0 (OSL-3.0)",
+		"License :: OSI Approved :: Open Software License 3.0 (OSL-3.0)",
 
-        "Programming Language :: Python :: 2",
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.4",
-        "Programming Language :: Python :: 3.5",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-    	],
+		"Programming Language :: Python :: 2",
+		"Programming Language :: Python :: 2.7",
+		"Programming Language :: Python :: 3",
+		"Programming Language :: Python :: 3.4",
+		"Programming Language :: Python :: 3.5",
+		"Programming Language :: Python :: 3.6",
+		"Programming Language :: Python :: 3.7",
+		],
 
-    keywords="hopscotch dict hashtable",
-    )
+	keywords="hopscotch dict hashtable",
+	)

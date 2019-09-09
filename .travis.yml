@@ -3,16 +3,16 @@ language: python
 sudo: false
 
 python:
-    - "2.7"
-    - "3.4"
-    - "3.5"
-    - "3.6"
-    - "pypy"
-    - "pypy3"
+		- "2.7"
+		- "3.4"
+		- "3.5"
+		- "3.6"
+		- "pypy"
+		- "pypy3"
 
 install: "pip install .[test]"
 
 script: make ci-test
 
 after_success:
-    - codecov -X gcov
+		- codecov -X gcov
