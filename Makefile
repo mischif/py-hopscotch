@@ -5,7 +5,7 @@
 #       Released under version 3.0 of the Non-Profit Open Source License       #
 ################################################################################
 
-COV_OPTIONS="--cov=hopscotchdict --cov-report xml --cov-report term-missing --cov-config setup.cfg"
+COV_OPTIONS="--cov=py_hopscotch_dict --cov-report xml --cov-report term-missing --cov-config setup.cfg"
 
 .PHONY: test ci-test build
 
