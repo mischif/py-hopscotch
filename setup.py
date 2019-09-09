@@ -20,7 +20,7 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
 setup(
     name="py-hopscotch-dict-mischif",
 
-    version="1.0.0-rc.1",
+    version="1.0.0-rc.2",
 
     packages=["hopscotchdict"],
 
