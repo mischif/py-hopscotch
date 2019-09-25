@@ -18,7 +18,7 @@ with open(path.join(here, "README.md"), encoding="utf-8") as desc:
 	long_description = desc.read()
 
 # Get the package version
-with open(path.join(here, 'VERSION'), encoding="utf-8") as version_file:
+with open(path.join(here, "VERSION"), encoding="utf-8") as version_file:
 	package_version = version_file.read().strip()
 
 
