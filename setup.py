@@ -3,7 +3,7 @@
 ################################################################################
 #                              py-hopscotch-dict                               #
 #    Full-featured `dict` replacement with guaranteed constant-time lookups    #
-#                               (C) 2019 Mischif                               #
+#                       (C) 2017, 2019-2020 Jeremy Brown                       #
 #       Released under version 3.0 of the Non-Profit Open Source License       #
 ################################################################################
 
@@ -69,6 +69,7 @@ setup(
 		"Programming Language :: Python :: 3",
 		"Programming Language :: Python :: 3.6",
 		"Programming Language :: Python :: 3.7",
+		"Programming Language :: Python :: 3.8",
 		],
 
 	keywords="hopscotch dict hashtable",

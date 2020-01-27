@@ -3,7 +3,7 @@
 ################################################################################
 #                              py-hopscotch-dict                               #
 #    Full-featured `dict` replacement with guaranteed constant-time lookups    #
-#                            (C) 2017, 2019 Mischif                            #
+#                       (C) 2017, 2019-2020 Jeremy Brown                       #
 #       Released under version 3.0 of the Non-Profit Open Source License       #
 ################################################################################
 
@@ -175,6 +175,7 @@ def test_valid_free_up(scenario):
 
 		assert hd._get_lookup_index_info(1) == (hd.FREE_ENTRY, 0)
 		assert hd._get_lookup_index_info(15) == (3, 0)
+
 
 @pytest.mark.parametrize("scenario", ["full_wraps", "full", "last_distant"],
 	ids = ["full-neighborhood-wraps-array", "full-neighborhood", "last-index-distant-neighbors"])
@@ -671,6 +672,7 @@ def test_reversed(gen_dict):
 	assert len(keys) == len(rev_keys)
 	for i in range(len(keys)):
 		assert keys[i] == rev_keys[len(keys) - i - 1]
+
 
 @pytest.mark.parametrize("valid_key", [True, False],
 	ids = ["stored-value", "default-value"])
