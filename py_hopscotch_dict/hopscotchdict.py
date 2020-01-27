@@ -64,12 +64,7 @@ class HopscotchDict(MutableMapping):
 
 		for i in range(nbhd_size):
 			if nbhd & (1 << i) > 0:
-				if lookup_idx + i >= max_size:
-					raise IndexError((
-						u"Index {0} has supposed displaced neighbor "
-						u"outside array").format(lookup_idx))
-				else:
-					result.append(lookup_idx + i)
+				result.append((lookup_idx + i) % max_size)
 
 		return result
 
@@ -149,8 +144,8 @@ class HopscotchDict(MutableMapping):
 			nearest_neighbor = self._get_open_neighbor(entry_expected_idx)
 
 			if nearest_neighbor is not None:
-				target_nbhd_idx = target_idx - entry_expected_idx
-				nearest_nbhd_idx = nearest_neighbor - entry_expected_idx
+				target_nbhd_idx = (target_idx - entry_expected_idx) % self._size
+				nearest_nbhd_idx = (nearest_neighbor - entry_expected_idx) % self._size
 
 				self._set_lookup_index_info(nearest_neighbor, data=data_idx)
 				self._set_lookup_index_info(target_idx, data=self.FREE_ENTRY)
@@ -175,21 +170,29 @@ class HopscotchDict(MutableMapping):
 
 			# Go _nbhd_size - 1 locations back in _lookup_table from the open location
 			# to find a neighbor that can be displaced into the open location
-			earliest_nn_nbhd_idx = max(target_idx, nearest_neighbor - self._nbhd_size) + 1
-			for idx in range(earliest_nn_nbhd_idx, nearest_neighbor):
+			for idx in range(1, self._nbhd_size + 1):
+				idx = (nearest_neighbor - self._nbhd_size + idx) % self._size
 				_, nbhd = self._get_lookup_index_info(idx)
 				idx_neighbors = self._get_displaced_neighbors(idx, nbhd, self._nbhd_size, self._size)
 
+				closest_idx = None
+				if len(idx_neighbors) > 0:
+					min_neighbor_idx = min(idx_neighbors, key=lambda i: (i - idx) % self._size)
+					if (min_neighbor_idx - idx) % self._size < (nearest_neighbor - idx) % self._size:
+						closest_idx = min_neighbor_idx
+
 				# There is an entry before the open location which can be shuffled into
 				# the open location
-				if len(idx_neighbors) > 0 and min(idx_neighbors) < nearest_neighbor:
-					punted_idx = min(idx_neighbors)
-					data_idx, _ = self._get_lookup_index_info(punted_idx)
+				if closest_idx is not None:
+					data_idx, _ = self._get_lookup_index_info(closest_idx)
 					self._set_lookup_index_info(nearest_neighbor, data=data_idx)
-					self._set_lookup_index_info(punted_idx, data=self.FREE_ENTRY)
-					self._set_neighbor(idx, nearest_neighbor - idx)
-					self._clear_neighbor(idx, punted_idx - idx)
-					lookup_idx = punted_idx
+					self._set_lookup_index_info(closest_idx, data=self.FREE_ENTRY)
+
+					closest_nbhd_idx = (closest_idx - idx) % self._size
+					nearest_nbhd_idx = (nearest_neighbor - idx) % self._size
+					self._set_neighbor(idx, nearest_nbhd_idx)
+					self._clear_neighbor(idx, closest_nbhd_idx)
+					lookup_idx = closest_idx
 					break
 
 				# If the last index before the open index has no displaced neighbors
@@ -201,7 +204,7 @@ class HopscotchDict(MutableMapping):
 
 			# If the index that had its data punted is inside the target index's neighborhood,
 			# the success condition has been attained
-			if lookup_idx < target_idx + self._nbhd_size:
+			if (lookup_idx - target_idx) % self._size < self._nbhd_size:
 				return
 
 		# No open indices exist between the given index and the end of the array
@@ -242,7 +245,8 @@ class HopscotchDict(MutableMapping):
 
 		result = None
 
-		for idx in range(lookup_idx, min(lookup_idx + self._nbhd_size, self._size)):
+		for idx in range(self._nbhd_size):
+			idx = (lookup_idx + idx) % self._size
 			data_idx, _ = self._get_lookup_index_info(idx)
 
 			if data_idx == self.FREE_ENTRY:
@@ -313,7 +317,7 @@ class HopscotchDict(MutableMapping):
 			expected_lookup_idx = abs(hash(key)) % self._size
 
 			nearest_neighbor = self._get_open_neighbor(expected_lookup_idx)
-			nbhd_idx = nearest_neighbor - expected_lookup_idx
+			nbhd_idx = (nearest_neighbor - expected_lookup_idx) % self._size
 			self._set_neighbor(expected_lookup_idx, nbhd_idx)
 			self._set_lookup_index_info(nearest_neighbor, data=data_idx)
 
@@ -575,7 +579,7 @@ class HopscotchDict(MutableMapping):
 		# the entry for the new key/value can be stored there
 		nearest_neighbor = self._get_open_neighbor(expected_lookup_idx)
 		if nearest_neighbor is not None:
-			nbhd_idx = nearest_neighbor - expected_lookup_idx
+			nbhd_idx = (nearest_neighbor - expected_lookup_idx) % self._size
 			self._set_neighbor(expected_lookup_idx, nbhd_idx)
 			self._set_lookup_index_info(nearest_neighbor, data=self._count)
 			self._keys.append(key)
@@ -627,42 +631,25 @@ class HopscotchDict(MutableMapping):
 		if data_idx is None:
 			raise KeyError(key)
 
-		# If the key and its associated value aren't the last entries in their respective lists,
-		# swap with the last entries to not leave a hole in said lists
 		else:
+			# If the key and its associated value aren't the last entries in their respective lists,
+			# swap with the last entries to not leave a hole in said lists
 			if data_idx != self._count - 1:
-				last_key = self._keys[-1]
-				last_val = self._values[-1]
-				last_data_lookup_idx = abs(hash(last_key)) % self._size
-
-				# Find the index in _lookup_table which points
-				# to the data at the end of the lists
-				_, nbhd = self._get_lookup_index_info(last_data_lookup_idx)
-				for neighbor in self._get_displaced_neighbors(last_data_lookup_idx, nbhd,
-															  self._nbhd_size, self._size):
-					neighbor_data_idx, _ = self._get_lookup_index_info(neighbor)
-
-					if neighbor_data_idx == self._count - 1:
-						last_data_lookup_idx = neighbor
-						break
+				tail_key = self._keys[-1]
+				tail_val = self._values[-1]
+				tail_lookup_idx, tail_data_idx = self._lookup(tail_key)
 
 				# Move the data to be removed to the end of each list and update indices
-				self._keys[data_idx] = last_key
-				self._values[data_idx] = last_val
-				self._set_lookup_index_info(last_data_lookup_idx, data=data_idx)
+				self._keys[data_idx] = tail_key
+				self._values[data_idx] = tail_val
+				self._set_lookup_index_info(tail_lookup_idx, data=data_idx)
 
 			# Update the neighborhood of the index the key to be removed is
 			# supposed to point to, since the key to be removed must be
 			# somewhere in it
 
-			# Checking if the actual index for the key is less than the expected
-			# index is unneccessary because data is only displaced forward in
-			# _lookup_table
-			if lookup_idx != expected_lookup_idx:
-				nbhd_idx = lookup_idx - expected_lookup_idx
-				self._clear_neighbor(expected_lookup_idx, nbhd_idx)
-			else:
-				self._clear_neighbor(expected_lookup_idx, 0)
+			nbhd_idx = (lookup_idx - expected_lookup_idx) % self._size
+			self._clear_neighbor(expected_lookup_idx, nbhd_idx)
 
 			# Remove the last item from the variable tables, either the actual
 			# data to be removed or what was originally at the end before

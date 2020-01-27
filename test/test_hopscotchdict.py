@@ -80,28 +80,31 @@ def test_make_lookup_table(tbl_size):
 			assert fmt == ">l L"
 
 
-@given(integers(), integers())
-def test_clear_neighbor(lookup_idx, nbhd_idx):
+def test_clear_neighbor():
 	hd = HopscotchDict()
 	hd["test_clear_neighbor"] = True
 
-	if lookup_idx < 0 or nbhd_idx < 0 or lookup_idx >= hd._size or nbhd_idx >= hd._nbhd_size:
-		with pytest.raises(ValueError):
-			hd._clear_neighbor(lookup_idx, 8)
-	else:
-		_, nbhd = hd._get_lookup_index_info(lookup_idx)
-		hd._clear_neighbor(lookup_idx, nbhd_idx)
-		assert hd._get_lookup_index_info(lookup_idx)[1] & ~(1 << nbhd_idx) == 0
+	with pytest.raises(ValueError):
+		hd._clear_neighbor(-1, 0)
+
+	with pytest.raises(ValueError):
+		hd._clear_neighbor(0, -1)
+
+	with pytest.raises(ValueError):
+		hd._clear_neighbor(10, 0)
+
+	with pytest.raises(ValueError):
+		hd._clear_neighbor(0, 10)
 
 	lookup_idx, _ = hd._lookup("test_clear_neighbor")
-	_, nbhd = hd._get_lookup_index_info(lookup_idx)
-	if nbhd != 0:
-		hd._clear_neighbor(lookup_idx, 0)
-		assert hd._get_lookup_index_info(lookup_idx)[1] == 0
+	assert hd._get_lookup_index_info(lookup_idx)[1] != 0
+
+	hd._clear_neighbor(lookup_idx, 0)
+	assert hd._get_lookup_index_info(lookup_idx)[1] == 0
 
 
-@pytest.mark.parametrize("scenario", ["unnecessary", "far"],
-	ids = ["unnecessary-action", "outside-neighborhood"])
+@pytest.mark.parametrize("scenario", ["unnecessary", "far", "displaced"],
+	ids = ["unnecessary-action", "outside-neighborhood", "displaced-entry"])
 def test_valid_free_up(scenario):
 	hd = HopscotchDict()
 
@@ -134,7 +137,6 @@ def test_valid_free_up(scenario):
 			hd[i] = "test_valid_free_up_{}".format(i)
 
 		# Entry at index 4 moves to 11
-		# import pdb; pdb.set_trace()
 		hd._free_up(1)
 
 		data_idx, nbhd = hd._get_lookup_index_info(1)
@@ -155,20 +157,39 @@ def test_valid_free_up(scenario):
 		assert data_idx == 3
 		assert nbhd == 0
 
+	elif scenario == "displaced":
+		hd._resize(16)
 
-@pytest.mark.parametrize("scenario", ["no_space", "last_none", "last_distant"],
-	ids = ["no_space", "last-index-no-neighbors", "last-index-distant-neighbors"])
+		for i in range(14, 63, 16):
+			hd[i] = "test_valid_free_up_{}".format(i)
+
+		for i in range(2, 9):
+			hd[i] = "test_valid_free_up_{}".format(i)
+
+		del hd[30]
+
+		assert hd._get_lookup_index_info(1) == (3, 0)
+		assert hd._get_lookup_index_info(15) == (hd.FREE_ENTRY, 0)
+
+		hd._free_up(1)
+
+		assert hd._get_lookup_index_info(1) == (hd.FREE_ENTRY, 0)
+		assert hd._get_lookup_index_info(15) == (3, 0)
+
+@pytest.mark.parametrize("scenario", ["full_wraps", "full", "last_distant"],
+	ids = ["full-neighborhood-wraps-array", "full-neighborhood", "last-index-distant-neighbors"])
 def test_invalid_free_up(scenario):
 	hd = HopscotchDict()
 
-	if scenario == "no_space":
-		for i in range(2, 8):
+	if scenario == "full_wraps":
+		hd._resize(16)
+		for i in range(12, 125, 16):
 			hd[i] = "test_invalid_free_up_{}".format(i)
 
 		with pytest.raises(RuntimeError):
-			hd._free_up(2)
+			hd._free_up(12)
 
-	elif scenario == "last_none":
+	elif scenario == "full":
 		for i in range(1, 257, 32):
 			hd[i] = "test_invalid_free_up_{}".format(i)
 
@@ -235,25 +256,27 @@ def test_get_displaced_neighbors(with_collisions):
 def test_lookup(key):
 	hd = HopscotchDict()
 
+	hd[7] = "test_lookup_7"
+	hd[15] = "test_lookup_15"
+
+	assert hd._lookup(7) == (7, 0)
+	assert hd._lookup(15) == (0, 1)
+
+	del hd[7]
+	del hd[15]
+
 	lookup_idx = abs(hash(key)) % hd._size
 	hd[key] = True
 	assert hd._lookup(key)[0] == lookup_idx
 
 
-@pytest.mark.parametrize("scenario", ["missing", "outside", "free"],
-	ids = ["missing-key", "neighbor-outside-array", "neighbor-previously-freed"])
+@pytest.mark.parametrize("scenario", ["missing", "free"],
+	ids = ["missing-key", "neighbor-previously-freed"])
 def test_lookup_fails(scenario):
 	hd = HopscotchDict()
 
 	if scenario == "missing":
 		assert hd._lookup("test_lookup") == (None, None)
-
-	elif scenario == "outside":
-		hd[7] = "test_lookup_7"
-		hd._set_neighbor(7, 1)
-
-		with pytest.raises(IndexError):
-			hd._lookup(7)
 
 	elif scenario == "free":
 		hd[4] = "test_lookup"
@@ -391,9 +414,10 @@ def test_setitem_happy_path(gen_dict):
 
 
 @pytest.mark.parametrize("scenario",
-	["overwrite", "density_resize", "snr", "bnr", "ovw_err", "ins_err"],
+	["overwrite", "density_resize", "snr", "bnr", "ovw_err", "ins_err", "key_coll"],
 	ids = ["overwrite", "density-resize", "small-nbhd-resize",
-		   "big-nbhd-resize", "overwrite-error", "insert-error"])
+		   "big-nbhd-resize", "overwrite-error", "insert-error",
+		   "degenerate-key-collision"])
 def test_setitem_special_cases(scenario):
 	hd = HopscotchDict()
 
@@ -459,6 +483,18 @@ def test_setitem_special_cases(scenario):
 		for i in hd._keys:
 			assert hd[i] == "test_setitem_{}".format(i)
 
+	elif scenario == "key_coll":
+		small_key = -1 % 2 ** 33
+		large_key = -1 % 2 ** 34
+
+		hd[small_key] = "test_setitem_key_coll_small"
+		hd[large_key] = "test_setitem_key_coll_large"
+
+		assert hd._size == 8
+		assert hd[small_key] == "test_setitem_key_coll_small"
+		assert hd[large_key] == "test_setitem_key_coll_large"
+
+
 
 @pytest.mark.parametrize("scenario", ["found", "missing"],
 	ids = ["found-key", "missing-key"])
@@ -518,11 +554,10 @@ def test_delitem(scenario):
 		with pytest.raises(KeyError):
 			del hd["test_delitem"]
 
-
 @given(sample_dict)
+@seed(262902792531650980708949300196033766230)
 def test_contains_and_has_key(gen_dict):
 	hd = HopscotchDict(gen_dict)
-
 	for key in hd._keys:
 		assert key in hd
 
