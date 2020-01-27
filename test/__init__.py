@@ -25,10 +25,10 @@ from hypothesis.strategies import (booleans,
 								   tuples,
 								   )
 
-settings.register_profile(u"ci", database=None, deadline=300, suppress_health_check=[HealthCheck.too_slow])
+settings.register_profile(u"ci", database=None, deadline=1000, suppress_health_check=[HealthCheck.too_slow])
 settings.load_profile(getenv(u"HYPOTHESIS_PROFILE", u"default"))
 
-max_dict_entries = maxsize if getenv(u"HYPOTHESIS_PROFILE", u"default") == "ci" else 2 ** 24
+max_dict_entries = 2*28 if getenv(u"HYPOTHESIS_PROFILE", u"default") == "ci" else 2 ** 20
 
 dict_keys = deferred(lambda: one_of(none(),
 									booleans(),
