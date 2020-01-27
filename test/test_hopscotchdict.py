@@ -12,146 +12,148 @@ from sys import version_info
 
 import pytest
 
-from hypothesis import example, given
+from hypothesis import example, given, seed
 from hypothesis.strategies import integers
+from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
 from py_hopscotch_dict import HopscotchDict
-from test import dict_keys, sample_dict
+from test import dict_keys, dict_values, max_dict_entries, sample_dict
 
 
-@given(integers(min_value=8, max_value=2**20))
-def test_make_indices(array_size):
-	if array_size <= 2**7:
-		expected_bit_length = 8
-	elif array_size <= 2**15:
-		expected_bit_length = 16
-	elif array_size <= 2**31:
-		expected_bit_length = 32
-	elif array_size <= 2**63:
-		expected_bit_length = 64
+@given(sample_dict, integers())
+def test_get_lookup_index_info(gen_dict, lookup_idx):
+	hd = HopscotchDict(gen_dict)
 
-	indices = HopscotchDict._make_indices(array_size)
-
-	assert len(indices) == array_size
-	assert indices.itemsize == expected_bit_length / 8
-	assert all(map(lambda i: i == -1, indices))
+	if lookup_idx < 0 or lookup_idx >= hd._size:
+		with pytest.raises(ValueError):
+			hd._get_lookup_index_info(lookup_idx)
+	else:
+		data_idx, nbhd = hd._get_lookup_index_info(lookup_idx)
+		for idx in hd._get_displaced_neighbors(lookup_idx, nbhd, hd._nbhd_size, hd._size):
+			data_idx, _ = hd._get_lookup_index_info(idx)
+			assert abs(hash(hd._keys[data_idx])) % hd._size == lookup_idx
 
 
-@pytest.mark.parametrize("nbhd_size", [8, 16, 32, 64],
-	ids = ["8-neighbor", "16-neighbor", "32-neighbor", "64-neighbor"])
-def test_make_nbhds(nbhd_size):
-	nbhds = HopscotchDict._make_nbhds(nbhd_size, 32)
+@given(sample_dict, integers(), integers(min_value=-1), integers(min_value=0))
+def test_set_lookup_index_info(gen_dict, lookup_idx, data_idx, nbhd):
+	hd = HopscotchDict(gen_dict)
 
-	assert len(nbhds) == 32
-	assert nbhds.itemsize == nbhd_size / 8
+	if lookup_idx < 0 or lookup_idx >= hd._size:
+		with pytest.raises(ValueError):
+			hd._set_lookup_index_info(lookup_idx, data=data_idx, nbhd=nbhd)
+	else:
+		nbhd = min(nbhd, 2 ** hd._nbhd_size - 1) 
+		data_idx = min(nbhd, 2 ** (hd._nbhd_size - 1) - 1)
+		hd._set_lookup_index_info(lookup_idx, data=data_idx, nbhd=nbhd)
+		assert hd._get_lookup_index_info(lookup_idx) == (data_idx, nbhd)
 
-	with pytest.raises(OverflowError):
-		nbhds[0] = 2 ** nbhd_size
 
-	nbhds[0] = 2 ** nbhd_size - 1
+@given(sample_dict, integers())
+def test_get_open_neighbor(gen_dict, lookup_idx):
+	hd = HopscotchDict(gen_dict)
+
+	if lookup_idx < 0 or lookup_idx >= hd._size:
+		with pytest.raises(ValueError):
+			hd._get_open_neighbor(lookup_idx)
+	else:
+		open_idx = hd._get_open_neighbor(lookup_idx)
+		for idx in range(lookup_idx, open_idx if open_idx is not None else lookup_idx + hd._nbhd_size):
+			data_idx, _ = hd._get_lookup_index_info(idx)
+			assert data_idx != hd.FREE_ENTRY
 
 
-@pytest.mark.parametrize("out_of_bounds_neighbor", [True, False],
-	ids = ["outside-neighborhood", "inside-neighborhood"])
-def test_clear_neighbor(out_of_bounds_neighbor):
+@given(integers(max_value=max_dict_entries))
+def test_make_lookup_table(tbl_size):
+	if tbl_size < 0:
+		with pytest.raises(ValueError):
+			HopscotchDict._make_lookup_table(tbl_size)
+	else:
+		tbl, fmt = HopscotchDict._make_lookup_table(tbl_size)
+
+		if tbl_size.bit_length() < 8:
+			assert fmt == "b B"
+		elif tbl_size.bit_length() < 16:
+			assert fmt == ">h H"
+		elif tbl_size.bit_length() < 32:
+			assert fmt == ">i I"
+		else:
+			assert fmt == ">l L"
+
+
+@given(integers(), integers())
+def test_clear_neighbor(lookup_idx, nbhd_idx):
 	hd = HopscotchDict()
 	hd["test_clear_neighbor"] = True
-	idx = hd._lookup("test_clear_neighbor")
 
-	if out_of_bounds_neighbor:
+	if lookup_idx < 0 or nbhd_idx < 0 or lookup_idx >= hd._size or nbhd_idx >= hd._nbhd_size:
 		with pytest.raises(ValueError):
-			hd._clear_neighbor(idx, 8)
+			hd._clear_neighbor(lookup_idx, 8)
 	else:
-		assert hd._nbhds[idx] != 0
-		hd._clear_neighbor(idx, 0)
-		assert hd._nbhds[idx] == 0
+		_, nbhd = hd._get_lookup_index_info(lookup_idx)
+		hd._clear_neighbor(lookup_idx, nbhd_idx)
+		assert hd._get_lookup_index_info(lookup_idx)[1] & ~(1 << nbhd_idx) == 0
+
+	lookup_idx, _ = hd._lookup("test_clear_neighbor")
+	_, nbhd = hd._get_lookup_index_info(lookup_idx)
+	if nbhd != 0:
+		hd._clear_neighbor(lookup_idx, 0)
+		assert hd._get_lookup_index_info(lookup_idx)[1] == 0
 
 
-@pytest.mark.parametrize("scenario", ["unnecessary", "near", "far", "displaced"],
-	ids = ["unnecessary-action", "inside-neighborhood", "outside-neighborhood", "displaced-entry"])
+@pytest.mark.parametrize("scenario", ["unnecessary", "far"],
+	ids = ["unnecessary-action", "outside-neighborhood"])
 def test_valid_free_up(scenario):
 	hd = HopscotchDict()
 
 	if scenario == "unnecessary":
+		with pytest.raises(ValueError):
+			hd._free_up(-1)
+
+		with pytest.raises(ValueError):
+			hd._free_up(10)
+
 		for i in range(2,7):
 			hd[i] = "test_valid_free_up_{}".format(i)
 
 		hd._free_up(0)
 
-		assert hd._indices[0] == hd.FREE_ENTRY
-		assert not hd._nbhds[0]
+		# Nothing was stored at the index, so nothing to do
+		data_idx, nbhd = hd._get_lookup_index_info(0)
+		assert data_idx == hd.FREE_ENTRY
+		assert nbhd == 0
 
-	elif scenario == "near":
-		for i in range(1, 6):
-			hd[i] = "test_valid_free_up_{}".format(i)
+		hd._free_up(4)
 
-		# Move to index 6
-		hd._free_up(1)
-
-		# Make sure index 1 is open
-		assert hd._indices[1] == hd.FREE_ENTRY
-		assert not hd._nbhds[1] & 1 << 7
-
-		# Make sure neighborhood knows where displaced entry is
-		assert hd._nbhds[1] & 1 << 2
-
-		# Index 6 in _indices should point to index 0 in _keys, _values, _hashes
-		assert hd._indices[6] == 0
-		assert not hd._nbhds[6]
+		# The index has an open neighbor, so nothing to do
+		data_idx, nbhd = hd._get_lookup_index_info(4)
+		assert data_idx == 2
+		assert nbhd == 1
 
 	elif scenario == "far":
 		for i in range(1, 11):
 			hd[i] = "test_valid_free_up_{}".format(i)
 
-		# Move to index 4, 4 moves to 11
+		# Entry at index 4 moves to 11
+		# import pdb; pdb.set_trace()
 		hd._free_up(1)
 
-		# Make sure index 1 is open
-		assert hd._indices[1] == hd.FREE_ENTRY
-		assert not hd._nbhds[1] & 1 << 7
+		data_idx, nbhd = hd._get_lookup_index_info(1)
 
-		# Make sure neighborhood knows where displaced entry is
-		assert hd._nbhds[1] & 1 << 4
+		# The entry at index 1 will not move as a neighbor will open up first
+		assert data_idx == 0
+		assert nbhd == 1
 
-		# Index 4 in _indices should point to index 0 in other lists
-		assert hd._indices[4] == 0
-		assert not hd._nbhds[4] & 1 << 7
+		data_idx, nbhd = hd._get_lookup_index_info(4)
 
-		# Make sure neighborhood knows where displaced entry is
-		assert hd._nbhds[4] & 1
+		# Index 4 in _lookup_table should be empty
+		assert data_idx == hd.FREE_ENTRY
+		assert nbhd & 1 << 7 > 0
 
-		# Index 11 in _indices should point to index 3 in other lists
-		assert hd._indices[11] == 3
-		assert not hd._nbhds[11]
+		data_idx, nbhd = hd._get_lookup_index_info(11)
 
-	elif scenario == "displaced":
-		hd._resize(16)
-
-		hd[0] = "test_valid_free_up_0"
-		hd[16] = "test_valid_free_up_16"
-
-		for i in range(2,8):
-			hd[i] = "test_valid_free_up_{}".format(i)
-
-		# Move to index 2; 2 goes to 8
-		hd._free_up(1)
-
-		# Make sure index 1 is open
-		assert hd._indices[1] == hd.FREE_ENTRY
-		assert not hd._nbhds[1]
-
-		# Index 2 in _indices should point to index 0 in other lists
-		assert hd._indices[2] == 0
-		assert not hd._nbhds[2] & 1 << 7
-
-		# Index 8 in _indices should point to index 2 in other lists
-		assert hd._indices[8] == 2
-		assert not hd._nbhds[8]
-
-		# Make sure neighborhoods knows where displaced entries are
-		assert hd._nbhds[0] & 1 << 7
-		assert hd._nbhds[0] & 1 << 5
-		assert hd._nbhds[2] & 1 << 1
+		# Index 11 in _lookup_table should point to index 3 in other lists
+		assert data_idx == 3
+		assert nbhd == 0
 
 
 @pytest.mark.parametrize("scenario", ["no_space", "last_none", "last_distant"],
@@ -198,46 +200,53 @@ def test_get_displaced_neighbors(with_collisions):
 	if with_collisions:
 		hd[1] = "test_get_displaced_neighbors_1"
 		hd[9] = "test_get_displaced_neighbors_9"
-		hd[17] = "test_get_displaced_neighbors_17"
 		hd[3] = "test_get_displaced_neighbors_3"
+		hd[17] = "test_get_displaced_neighbors_17"
 		hd[6] = "test_get_displaced_neighbors_6"
 		hd[14] = "test_get_displaced_neighbors_14"
 
 		assert hd._size == 8
 
-		assert hd._get_displaced_neighbors(1) == [1, 2, 4]
-		assert hd._get_displaced_neighbors(3) == [3]
-		assert hd._get_displaced_neighbors(6) == [6, 7]
+		data_idx, nbhd = hd._get_lookup_index_info(1)
+		assert hd._get_displaced_neighbors(1, nbhd, hd._nbhd_size, hd._size) == [1, 2, 4]
+
+		data_idx, nbhd = hd._get_lookup_index_info(3)
+		assert hd._get_displaced_neighbors(3, nbhd, hd._nbhd_size, hd._size) == [3]
+
+		data_idx, nbhd = hd._get_lookup_index_info(6)
+		assert hd._get_displaced_neighbors(6, nbhd, hd._nbhd_size, hd._size) == [6, 7]
 
 	else:
+		with pytest.raises(ValueError):
+			hd._get_displaced_neighbors(-1, 0, hd._nbhd_size, hd._size)
+
+		with pytest.raises(ValueError):
+			hd._get_displaced_neighbors(10, 0, hd._nbhd_size, hd._size)
+
 		for i in range(6):
 			hd[i] = "test_get_displaced_neighbors_{}".format(i)
 
 		for i in range(6):
-			assert hd._get_displaced_neighbors(i) == [i]
+			data_idx, nbhd = hd._get_lookup_index_info(i)
+			assert hd._get_displaced_neighbors(i, nbhd, hd._nbhd_size, hd._size) == [i]
 
 
 @given(dict_keys)
 def test_lookup(key):
 	hd = HopscotchDict()
 
-	idx = abs(hash(key)) % hd._size
+	lookup_idx = abs(hash(key)) % hd._size
 	hd[key] = True
-	assert hd._lookup(key) == idx
+	assert hd._lookup(key)[0] == lookup_idx
 
 
-@pytest.mark.parametrize("scenario", ["missing", "displaced", "outside", "free"],
-	ids = ["missing-key", "displaced-key", "neighbor-outside-array", "neighbor-previously-freed"])
+@pytest.mark.parametrize("scenario", ["missing", "outside", "free"],
+	ids = ["missing-key", "neighbor-outside-array", "neighbor-previously-freed"])
 def test_lookup_fails(scenario):
 	hd = HopscotchDict()
 
 	if scenario == "missing":
-		assert hd._lookup("test_lookup") == None
-
-	elif scenario == "displaced":
-		hd[3] = True
-		hd[11] = True
-		assert hd._lookup(3) == 4
+		assert hd._lookup("test_lookup") == (None, None)
 
 	elif scenario == "outside":
 		hd[7] = "test_lookup_7"
@@ -248,7 +257,7 @@ def test_lookup_fails(scenario):
 
 	elif scenario == "free":
 		hd[4] = "test_lookup"
-		hd._indices[4] = hd.FREE_ENTRY
+		hd._set_lookup_index_info(4, data=hd.FREE_ENTRY)
 
 		with pytest.raises(RuntimeError):
 			hd._lookup(4)
@@ -290,23 +299,25 @@ def test_resize(scenario):
 		assert hd[17] == "test_17"
 
 
-@pytest.mark.parametrize("out_of_bounds_neighbor", [True, False],
-	ids = ["outside-neighborhood", "inside-neighborhood"])
-def test_set_neighbor(out_of_bounds_neighbor):
+@given(integers(), integers())
+def test_set_neighbor(lookup_idx, nbhd_idx):
 	hd = HopscotchDict()
 	hd["test_set_neighbor"] = True
-	idx = hd._lookup("test_set_neighbor")
 
-	if out_of_bounds_neighbor:
+	if lookup_idx < 0 or nbhd_idx < 0 or lookup_idx >= hd._size or nbhd_idx >= hd._nbhd_size:
 		with pytest.raises(ValueError):
-			hd._set_neighbor(idx, 8)
+			hd._set_neighbor(lookup_idx, nbhd_idx)
 	else:
-		assert hd._nbhds[idx] != 255
+		_, nbhd = hd._get_lookup_index_info(lookup_idx)
+		hd._set_neighbor(lookup_idx, nbhd_idx)
+		assert hd._get_lookup_index_info(lookup_idx)[1] & 1 << nbhd_idx > 0
 
+	lookup_idx, _ = hd._lookup("test_set_neighbor")
+	_, nbhd = hd._get_lookup_index_info(lookup_idx)
+	if nbhd != 255:
 		for i in range(8):
-			hd._set_neighbor(idx, i)
-
-		assert hd._nbhds[idx] == 255
+			hd._set_neighbor(lookup_idx, i)
+		assert hd._get_lookup_index_info(lookup_idx)[1] == 255
 
 
 def test_clear():
@@ -321,15 +332,13 @@ def test_clear():
 	assert hd._size == 8
 	assert hd._nbhd_size == 8
 
-	assert not hd._keys
-	assert not hd._values
-	assert not hd._hashes
+	assert len(hd._keys) == 0
+	assert len(hd._values) == 0
 
-	assert len(hd._indices) == 8
-	assert len(set(hd._indices)) == 1
-
-	assert len(hd._nbhds) == 8
-	assert len(set(hd._nbhds)) == 1
+	for lookup_idx in range(hd._size):
+		data_idx, nbhd = hd._get_lookup_index_info(lookup_idx)
+		assert data_idx == hd.FREE_ENTRY
+		assert nbhd == 0
 
 
 def test_bare_init():
@@ -375,7 +384,10 @@ def test_setitem_happy_path(gen_dict):
 
 	for key in gen_dict:
 		assert hd[key] == gen_dict[key]
-		assert hd._lookup(key) in hd._get_displaced_neighbors(abs(hash(key)) % hd._size)
+		expected_lookup_idx = abs(hash(key)) % hd._size
+		_, nbhd = hd._get_lookup_index_info(expected_lookup_idx)
+		lookup_idx, _ = hd._lookup(key)
+		assert lookup_idx in hd._get_displaced_neighbors(expected_lookup_idx, nbhd, hd._nbhd_size, hd._size)
 
 
 @pytest.mark.parametrize("scenario",
@@ -458,31 +470,49 @@ def test_delitem(scenario):
 			hd[i] = "test_delitem_{}".format(i)
 
 		for key in hd._keys:
-			assert hd._indices[hd._lookup(key)] == key - 1
+			_, data_idx = hd._lookup(key)
+			assert data_idx == key - 1
 
 		del hd[6]
 
 		for key in hd._keys:
-			assert hd._indices[hd._lookup(key)] == key - 1
+			_, data_idx = hd._lookup(key)
+			assert data_idx == key - 1
 
 		del hd[2]
 
-		assert hd._indices[hd._lookup(1)] == 0
-		assert hd._indices[hd._lookup(3)] == 2
-		assert hd._indices[hd._lookup(4)] == 3
-		assert hd._indices[hd._lookup(5)] == 1
+		_, data_idx = hd._lookup(1)
+		assert data_idx == 0
+
+		_, data_idx = hd._lookup(3)
+		assert data_idx == 2
+
+		_, data_idx = hd._lookup(4)
+		assert data_idx == 3
+
+		_, data_idx = hd._lookup(5)
+		assert data_idx == 1
 
 		del hd[3]
 
-		assert hd._indices[hd._lookup(1)] == 0
-		assert hd._indices[hd._lookup(4)] == 2
-		assert hd._indices[hd._lookup(5)] == 1
+		_, data_idx = hd._lookup(1)
+		assert data_idx == 0
+
+		_, data_idx = hd._lookup(4)
+		assert data_idx == 2
+
+		_, data_idx = hd._lookup(5)
+		assert data_idx == 1
 
 		for key in copy(hd._keys):
 			del hd[key]
 
 		assert len(hd) == 0
-		assert max(hd._indices) == hd.FREE_ENTRY
+
+		for i in range(hd._size):
+			data_idx, nbhd = hd._get_lookup_index_info(i)
+			assert data_idx == hd.FREE_ENTRY
+			assert nbhd == 0
 
 	elif scenario == "missing":
 		with pytest.raises(KeyError):
@@ -688,3 +718,49 @@ def test_str(gen_dict):
 	hd = HopscotchDict(gen_dict)
 
 	assert str(hd) == str(gen_dict)
+
+
+class HopscotchStateMachine(RuleBasedStateMachine):
+	def __init__(self):
+		super(HopscotchStateMachine, self).__init__()
+		self.d = HopscotchDict()
+
+	def teardown(self):
+		keys = list(self.d.keys())
+
+		for key in keys:
+			del self.d[key]
+
+	@invariant()
+	def valid_neighborhoods(self):
+		for lookup_idx in range(self.d._size):
+			_, nbhd = self.d._get_lookup_index_info(lookup_idx)
+			if nbhd != 0:
+				for neighbor in self.d._get_displaced_neighbors(lookup_idx, nbhd,
+																self.d._nbhd_size,
+																self.d._size):
+					data_idx = self.d._get_lookup_index_info(neighbor)[0]
+					assert abs(hash(self.d._keys[data_idx])) % self.d._size == lookup_idx
+
+	@invariant()
+	def no_missing_data(self):
+		assert len(self.d._keys) == len(self.d._values)
+
+	@invariant()
+	def bounded_density(self):
+		if self.d._count > 0:
+			assert self.d._count / self.d._size <= self.d.MAX_DENSITY
+
+	@rule(k=dict_keys, v=dict_values)
+	def add_entry(self, k, v):
+		self.d[k] = v
+
+	@rule(k=dict_keys)
+	def remove_entry(self, k):
+		if k not in self.d._keys:
+			with pytest.raises(KeyError):
+				del self.d[k]
+		else:
+			del self.d[k]
+
+test_hopscotch_dict = HopscotchStateMachine.TestCase

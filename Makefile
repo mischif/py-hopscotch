@@ -5,7 +5,7 @@
 #       Released under version 3.0 of the Non-Profit Open Source License       #
 ################################################################################
 
-COV_OPTIONS="--cov=py_hopscotch_dict --cov-report xml --cov-report term-missing --cov-config setup.cfg"
+CI_OPTIONS="--cov-report xml"
 
 .PHONY: test ci-test build
 
@@ -18,7 +18,7 @@ test:
 	python -B setup.py test
 
 ci-test:
-	HYPOTHESIS_PROFILE=ci python setup.py test --addopts ${COV_OPTIONS}
+	HYPOTHESIS_PROFILE=ci python setup.py test --addopts ${CI_OPTIONS}
 
 build:
 	python setup.py build sdist bdist_wheel

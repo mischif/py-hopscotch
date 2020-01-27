@@ -9,22 +9,23 @@
 
 from __future__ import division
 from array import array
+from struct import calcsize, pack, pack_into, unpack_from
 from sys import maxsize, version_info
 
-# future_builtins import will fail for < 2.6 (which isn't supported)
-if version_info.major < 3:
+try:
+	from collections.abc import MutableMapping
+except ImportError:
+	# future_builtins import will fail for < 2.6 (which isn't supported)
 	from future_builtins import zip, map
 	from collections import MutableMapping
-else:
-	from collections.abc import MutableMapping
 
 
 class HopscotchDict(MutableMapping):
 
-# Prevent default creation of __dict__, which should save space if many
-# instances of HopscotchDict are used at once
-# (Only true on 3.x, as 2.x creates __dict__ regardless)
-	__slots__ = ("_count", "_hashes", "_indices", "_keys", "_nbhds", "_nbhd_size",
+	# Prevent default creation of __dict__, which should save space if many
+	# instances of HopscotchDict are used at once
+	# (Only true on 3.x, as 2.x creates __dict__ regardless)
+	__slots__ = ("_count", "_keys", "_lookup_table", "_nbhd_size", "_pack_fmt",
 				 "_size", "_values")
 
 	# Python ints are signed, add one to get word length
@@ -40,184 +41,252 @@ class HopscotchDict(MutableMapping):
 	MAX_DENSITY = 0.8
 
 	@staticmethod
-	def _make_indices(size):
+	def _get_displaced_neighbors(lookup_idx, nbhd, nbhd_size, max_size):
 		"""
-		Create the array that holds the index to the _keys, _values and _hashes
-		lists that hold the data
+		Find the indices in _lookup_table that supposedly relate to a key that
+		originally mapped to the given index, but were displaced during some
+		previous _free_up call
 
-		:param size: The size of array to create
+		:param lookup_idx: The index in _lookup_table to find displaced neighbors for
+		:param nbhd: The neighborhood at lookup_idx
+		:param nbhd_size: The size of the given neighborhood
+		:param max_size: The current maximum size of the dict
 
-		:returns: An array of length `size` whose entries can hold an integer of
-							at least `size`
+		:return: (list) Indices in _lookup_table that supposedly have data that would
+						be stored at lookup_idx were it empty at the time of insertion
 		"""
-		if size <= 2**7: return array("b", [HopscotchDict.FREE_ENTRY]) * size
-		if size <= 2**15: return array("h", [HopscotchDict.FREE_ENTRY]) * size
-		if size <= 2**31: return array("i", [HopscotchDict.FREE_ENTRY]) * size
-		return array("l", [HopscotchDict.FREE_ENTRY]) * size
+		if lookup_idx < 0:
+			raise ValueError(u"Indexes cannot be negative")
+		elif lookup_idx >= max_size:
+			raise ValueError(u"Index {0} outside array".format(lookup_idx))
+
+		result = []
+
+		for i in range(nbhd_size):
+			if nbhd & (1 << i) > 0:
+				if lookup_idx + i >= max_size:
+					raise IndexError((
+						u"Index {0} has supposed displaced neighbor "
+						u"outside array").format(lookup_idx))
+				else:
+					result.append(lookup_idx + i)
+
+		return result
 
 	@staticmethod
-	def _make_nbhds(nbhd_size, array_size):
+	def _make_lookup_table(table_size):
 		"""
-		Create the array that holds the neighborhood for each index in _indices;
-		each neighborhood is stored as an n-bit integer where n is the desired size
+		Make the array that holds the indices into _keys/_values and the
+		neighborhoods for each index
 
-		:param nbhd_size: The desired neighborhood size in bits
-		:param array_size: The size of array to create
+		:param table_size: The number of entries of the returned table
 
-		:returns: An array of length `array_size` containing `nbhd_size`-bit integers
+		:return: (bytearray) The desired table
 		"""
-		if nbhd_size == 8: return array("B", [0]) * array_size
-		if nbhd_size == 16: return array("H", [0]) * array_size
-		if nbhd_size == 32: return array("I", [0]) * array_size
-		return array("L", [0]) * array_size
+		if table_size < 0:
+			raise ValueError(u"Lookup table cannot have negative length")
 
-	def _clear_neighbor(self, idx, nbhd_idx):
-		"""
-		Set the given neighbor for the given index as unoccupied, with the neighbor
-		value 0 representing the given index
+		table_log_size = table_size.bit_length()
 
-		:param idx: The index in _indices
-		:param nbhd_idx: The neighbor in the neighborhood of idx to set unoccupied
+		if table_log_size < 8:
+			struct_fmt = "b B"
+		elif table_log_size < 16:
+			struct_fmt = ">h H"
+		elif table_log_size < 32:
+			struct_fmt = ">i I"
+		else:
+			struct_fmt = ">l L"
+
+		return bytearray(pack(struct_fmt, HopscotchDict.FREE_ENTRY, 0) * table_size), struct_fmt
+
+	def _clear_neighbor(self, lookup_idx, nbhd_idx):
 		"""
-		if nbhd_idx >= self._nbhd_size:
+		Set the given neighbor for the given index as unoccupied, with the neighborhood
+		index 0 representing the given index
+
+		:param lookup_idx: The index in _lookup_table
+		:param nbhd_idx: The neighbor in the neighborhood of _lookup_table to set unoccupied
+		"""
+		if lookup_idx < 0 or nbhd_idx < 0:
+			raise ValueError(u"Indexes cannot be negative")
+		elif lookup_idx >= self._size:
+			raise ValueError(u"Index {0} outside array".format(lookup_idx))
+		elif nbhd_idx >= self._nbhd_size:
 			raise ValueError(u"Trying to clear neighbor outside neighborhood")
 
-		self._nbhds[idx] &= ~(1 << self._nbhd_size - nbhd_idx - 1)
+		lookup_offset = calcsize(self._pack_fmt) * lookup_idx
+		value_idx, nbhd = unpack_from(self._pack_fmt, self._lookup_table, lookup_offset)
 
-	def _free_up(self, idx):
+		nbhd &= ~(1 << nbhd_idx)
+
+		pack_into(self._pack_fmt, self._lookup_table, lookup_offset, value_idx, nbhd)
+
+	def _free_up(self, target_idx):
 		"""
-		Set the specified index in _indices as unoccupied by moving stored data to
-		an unoccupied neighbor; if all neighbors are occupied then move data from
-		a neighbor out to one of its neighbors in an attempt to move an opening
-		closer to the specified index
-		The magic function in hopscotch hashing
+		Create an opening in the neighborhood of the given index by moving data
+		from a neighbor out to one of its neighbors
 
-		:param idx: The index in _indices to open up
+		:param target_idx: The index in _lookup_table to find an oppening in its
+						   nieighborhood for
 		"""
+		if target_idx < 0:
+			raise ValueError(u"Indexes cannot be negative")
+		elif target_idx >= self._size:
+			raise ValueError(u"Index {0} outside array".format(target_idx))
 
-		# Attempting to free up an index that currently points nowhere should
-		# be a no-op
-		if self._indices[idx] == self.FREE_ENTRY:
+		# Attempting to free up an index that has an open neighbor should be a no-op
+		if self._get_open_neighbor(target_idx) is not None:
 			return
 
-		# Start searching for an open index from where the key in idx is
-		# supposed to hash to in case the key is displaced and what originally
-		# displaced it has been removed; if the key is not displaced
-		# orig_idx == idx anyway
-		orig_idx = self._hashes[self._indices[idx]] % self._size
-		act_idx = orig_idx
+		data_idx, _ = self._get_lookup_index_info(target_idx)
+		entry_expected_idx = abs(hash(self._keys[data_idx])) % self._size
 
-		while act_idx < self._size:
+		# It is possible the entry in _lookup_table at target_idx is a displaced
+		# neighbor of some prior index; if that's the case see if there is an
+		# open neighbor of that prior index that the entry at target_idx can be
+		# shifted to
+		if entry_expected_idx != target_idx:
+			nearest_neighbor = self._get_open_neighbor(entry_expected_idx)
 
-			if self._indices[act_idx] != self.FREE_ENTRY:
-				act_idx += 1
-				continue
+			if nearest_neighbor is not None:
+				target_nbhd_idx = target_idx - entry_expected_idx
+				nearest_nbhd_idx = nearest_neighbor - entry_expected_idx
 
-			# If there is an opening available in the neighborhood of the index 
-			# the key in idx originally hashed to, move the pointer in the given
-			# index to the open index and update the appropriate neighborhoods
-			elif act_idx - orig_idx < self._nbhd_size:
-				# idx is the index to open up
-				# orig_idx is the index the key in self._indices[idx] is
-				# supposed to hash to
-				# act_idx is the open index
-				
-				self._indices[act_idx] = self._indices[idx]
-				self._set_neighbor(orig_idx, act_idx - orig_idx)
-				self._indices[idx] = self.FREE_ENTRY
-
-				# If the key in idx is not displaced, there could be no neighbor
-				# displaced from orig_idx at idx - orig_idx so it would be okay
-				# to clear it; if the key is displaced, there could be no
-				# neighbor of idx at idx and would likewise be okay to clear
-				self._clear_neighbor(idx, 0)
-				self._clear_neighbor(orig_idx, idx - orig_idx)
+				self._set_lookup_index_info(nearest_neighbor, data=data_idx)
+				self._set_lookup_index_info(target_idx, data=self.FREE_ENTRY)
+				self._set_neighbor(entry_expected_idx, nearest_nbhd_idx)
+				self._clear_neighbor(entry_expected_idx, target_nbhd_idx)
+				# I used to clear the target_idx neighbor when the entry in target_idx
+				# was displaced, but don't remember why; I'll keep a commented form of
+				# that code for now in case it breaks something in testing
+				# self._clear_neighbor(target_idx, 0)
 				return
 
-			# The open index is too far away, so find the closest index to the
-			# given index to free up and repeat until the given index is opened
-			else:
-				for i in range(max(orig_idx, act_idx - self._nbhd_size) + 1, act_idx):
+		# Walking down the array for an empty spot and shuffling entries around is
+		# the only way
+		lookup_idx = target_idx + self._nbhd_size
+		while target_idx + self._nbhd_size <= lookup_idx < self._size:
+			nearest_neighbor = self._get_open_neighbor(lookup_idx)
 
-					# If the last index before the open index has no displaced
-					# neighbors or its closest one is after the open index,
-					# every index between the given index and the open index is
-					# filled with data displaced from other indices, and the
-					# invariant cannot be maintained without a resize
-					if i == act_idx - 1:
-						if (not self._nbhds[i]
-							or min(self._get_displaced_neighbors(i)) > act_idx):
-								raise RuntimeError((
-										u"No space available before open index"))
+			# None of the next _nbhd_size - 1 locations in _lookup_table are empty
+			if nearest_neighbor is None:
+				lookup_idx += self._nbhd_size
+				continue
 
-					# If the index has displaced neighbors and one is before the open
-					# index, move the data in the neighbor into the open index
-					if self._nbhds[i]:
-						hop_idx = min(self._get_displaced_neighbors(i))
-						if hop_idx < act_idx:
-							self._indices[act_idx] = self._indices[hop_idx]
-							self._indices[hop_idx] = self.FREE_ENTRY
-							self._set_neighbor(i, act_idx - i)
-							self._clear_neighbor(i, hop_idx - i)
-							act_idx = hop_idx
-							break
-					else:
-						continue
+			# Go _nbhd_size - 1 locations back in _lookup_table from the open location
+			# to find a neighbor that can be displaced into the open location
+			earliest_nn_nbhd_idx = max(target_idx, nearest_neighbor - self._nbhd_size) + 1
+			for idx in range(earliest_nn_nbhd_idx, nearest_neighbor):
+				_, nbhd = self._get_lookup_index_info(idx)
+				idx_neighbors = self._get_displaced_neighbors(idx, nbhd, self._nbhd_size, self._size)
+
+				# There is an entry before the open location which can be shuffled into
+				# the open location
+				if len(idx_neighbors) > 0 and min(idx_neighbors) < nearest_neighbor:
+					punted_idx = min(idx_neighbors)
+					data_idx, _ = self._get_lookup_index_info(punted_idx)
+					self._set_lookup_index_info(nearest_neighbor, data=data_idx)
+					self._set_lookup_index_info(punted_idx, data=self.FREE_ENTRY)
+					self._set_neighbor(idx, nearest_neighbor - idx)
+					self._clear_neighbor(idx, punted_idx - idx)
+					lookup_idx = punted_idx
+					break
+
+				# If the last index before the open index has no displaced neighbors
+				# or its closest one is after the open index, every index between the
+				# given index and the open index is filled with data displaced from other indices,
+				# and the invariant cannot be maintained without a resize
+				elif idx == nearest_neighbor - 1:
+					raise RuntimeError((u"No space available before open index"))
+
+			# If the index that had its data punted is inside the target index's neighborhood,
+			# the success condition has been attained
+			if lookup_idx < target_idx + self._nbhd_size:
+				return
 
 		# No open indices exist between the given index and the end of the array
 		raise RuntimeError(u"Could not open index while maintaining invariant")
 
-	def _get_displaced_neighbors(self, idx):
+	def _get_lookup_index_info(self, lookup_idx):
 		"""
-		Find the indices that supposedly contain an item that originally hashed to
-		the given index, but were displaced during some previous _free_up call
+		Get the index into _keys/_values and the neighborhood at the given index
+		of _lookup_table
 
-		:param idx: The index in _indices to find displaced neighbors for
+		:param lookup_idx: the index to find info for
 
-		:returns: A list of indices in _indices that supposedly contain an item that
-							originally hashed to the given location
+		:return: (tuple) The index into _keys/_values (or the empty sentinel),
+						 and the neighborhood at the given index
 		"""
-		neighbors = []
-		nbhd = self._nbhds[idx]
+		if lookup_idx < 0:
+			raise ValueError(u"Indexes cannot be negative")
+		elif lookup_idx >= self._size:
+			raise ValueError(u"Index {0} outside array".format(lookup_idx))
 
-		for i in range(self._nbhd_size - 1, -1, -1):
-			if nbhd & 1 << i:
-				neighbors.append(idx + self._nbhd_size - i - 1)
+		lookup_offset = calcsize(self._pack_fmt) * lookup_idx
+		return unpack_from(self._pack_fmt, self._lookup_table, lookup_offset)
 
-		return neighbors
+	def _get_open_neighbor(self, lookup_idx):
+		"""
+		Find the first index in the neighborhood of the given index that is not
+		in use
+
+		:param lookup_idx: The index in _lookup_table to find an open neighbor for
+
+		:return: (int) The index in _lookup_table nearest to the given index not
+					   currently in use
+		"""
+		if lookup_idx < 0:
+			raise ValueError(u"Indexes cannot be negative")
+		elif lookup_idx >= self._size:
+			raise ValueError(u"Index {0} outside array".format(lookup_idx))
+
+		result = None
+
+		for idx in range(lookup_idx, min(lookup_idx + self._nbhd_size, self._size)):
+			data_idx, _ = self._get_lookup_index_info(idx)
+
+			if data_idx == self.FREE_ENTRY:
+				result = idx
+				break
+
+		return result
 
 	def _lookup(self, key):
 		"""
-		Find the index in _indices that corresponds to the given key
+		Find the indices in _lookup_table and _keys that corresponds to the given key
 
 		:param key: The key to search for in the dict
 
-		:returns: The index in _indices that corresponds to the given key if it
-							exists; None otherwise
+		:return: (tuple) The index in _lookup_table that holds the index to _keys for
+						 the given key and the index to _keys, or None for both if the
+						 key has not been inserted
 		"""
-		retval = None
-		hashed = abs(hash(key))
+		data_idx = None
+		lookup_idx = abs(hash(key)) % self._size
 
-		for idx in self._get_displaced_neighbors(hashed % self._size):
-			if idx >= self._size:
-				raise IndexError((
-					u"Index {0} has supposed displaced neighbor "
-					u"outside array").format(hashed % self._size))
+		_, nbhd = self._get_lookup_index_info(lookup_idx)
 
-			if self._indices[idx] < 0:
+		for neighbor in self._get_displaced_neighbors(lookup_idx, nbhd, self._nbhd_size, self._size):
+			neighbor_data_idx, _ = self._get_lookup_index_info(neighbor)
+
+			if neighbor_data_idx < 0:
 				raise RuntimeError((
 					u"Index {0} has supposed displaced neighbor that points to "
-					u"free index").format(hashed % self._size))
+					u"free index").format(lookup_idx))
 
-			if (self._keys[self._indices[idx]] is key
-				or (self._hashes[self._indices[idx]] == hashed
-				and self._keys[self._indices[idx]] == key)):
-					retval = idx
-		return retval
+			if self._keys[neighbor_data_idx] == key:
+					data_idx = neighbor_data_idx
+					lookup_idx = neighbor
+					break
+
+		if data_idx is None:
+			lookup_idx = None
+
+		return (lookup_idx, data_idx)
 
 	def _resize(self, new_size):
 		"""
-		Resize the dict and relocates the current entries to their new indices
+		Resize the dict and relocate the current entries
 
 		:param new_size: The desired new size of the dict
 		"""
@@ -237,42 +306,62 @@ class HopscotchDict(MutableMapping):
 					u"Resizing requires too-large neighborhood")
 			self._nbhd_size = min(s for s in self.ALLOWED_NBHD_SIZES if s >= resized_nbhd_size)
 
-		self._nbhds = self._make_nbhds(self._nbhd_size, new_size)
-		self._indices = self._make_indices(new_size)
 		self._size = new_size
+		self._lookup_table, self._pack_fmt = self._make_lookup_table(self._size)
 
+		for data_idx, key in enumerate(self._keys):
+			expected_lookup_idx = abs(hash(key)) % self._size
 
-		# This works b/c the order of hashes is the same as the order of keys
-		# and values
-		for data_idx, hsh in enumerate(self._hashes):
-			exp_idx = hsh % self._size
+			nearest_neighbor = self._get_open_neighbor(expected_lookup_idx)
+			nbhd_idx = nearest_neighbor - expected_lookup_idx
+			self._set_neighbor(expected_lookup_idx, nbhd_idx)
+			self._set_lookup_index_info(nearest_neighbor, data=data_idx)
 
-			if self._indices[exp_idx] == self.FREE_ENTRY:
-				self._indices[exp_idx] = data_idx
-				self._set_neighbor(exp_idx, 0)
-			else:
-				# _resize was called either because the dict was too dense or an
-				# item could not be added w/o violating an invariant; in the
-				# first case all invariants will still hold with even more space
-				# so the call to _free_up will succeed; in the second case the item
-				# that triggered this resize has not yet been added to the dict and
-				# thus is equivalent to the first case and the call will again succeed
-				self._free_up(exp_idx)
-				self._indices[exp_idx] = data_idx
-				self._set_neighbor(exp_idx, 0)
-
-
-	def _set_neighbor(self, idx, nbhd_idx):
+	def _set_lookup_index_info(self, lookup_idx, data=None, nbhd=None):
 		"""
-		Set the given neighbor for the given index as occupied
+		Update the given index of _lookup_table with new information
 
-		:param idx: The index in _indices
-		:param nbhd_idx: The neighbor in the neighborhood of idx to set occupied
+		:param lookup_idx: Index in _lookup_table to update
+		:param data: New index into _keys/_values, or None to leave alone
+		:param nbhd: New neighborhood information, or None to leave alone
 		"""
-		if nbhd_idx >= self._nbhd_size:
-			raise ValueError(u"Trying to set neighbor outside neighborhood")
+		if lookup_idx < 0:
+			raise ValueError(u"Indexes cannot be negative")
+		elif lookup_idx >= self._size:
+			raise ValueError(u"Index {0} outside array".format(lookup_idx))
 
-		self._nbhds[idx] |= (1 << self._nbhd_size - nbhd_idx - 1)
+		lookup_offset = calcsize(self._pack_fmt) * lookup_idx
+		data_idx, neighbors = unpack_from(self._pack_fmt, self._lookup_table, lookup_offset)
+
+		if data is not None:
+			data_idx = data
+
+		if nbhd is not None:
+			neighbors = nbhd
+
+		pack_into(self._pack_fmt, self._lookup_table, lookup_offset, data_idx, neighbors)
+
+	def _set_neighbor(self, lookup_idx, nbhd_idx):
+		"""
+		Set the given neighbor for the given index as occupied, with the neighborhood
+		index 0 representing the given index
+
+		:param lookup_idx: The index in _lookup_table
+		:param nbhd_idx: The neighbor in the neighborhood of lookup_idx to set occupied
+		"""
+		if lookup_idx < 0 or nbhd_idx < 0:
+			raise ValueError(u"Indexes cannot be negative")
+		elif lookup_idx >= self._size:
+			raise ValueError(u"Index {0} outside array".format(lookup_idx))
+		elif nbhd_idx >= self._nbhd_size:
+			raise ValueError(u"Trying to clear neighbor outside neighborhood")
+
+		lookup_offset = calcsize(self._pack_fmt) * lookup_idx
+		value_idx, nbhd = unpack_from(self._pack_fmt, self._lookup_table, lookup_offset)
+
+		nbhd |= (1 << nbhd_idx)
+
+		pack_into(self._pack_fmt, self._lookup_table, lookup_offset, value_idx, nbhd)
 
 	def clear(self):
 		"""
@@ -288,21 +377,20 @@ class HopscotchDict(MutableMapping):
 		# in its expected index
 		self._nbhd_size = 8
 
-		# Table that stores values associated with keys
+		# Stored values
+		if hasattr(self, "_values"):
+			del self._values
 		self._values = []
 
-		# Table that stores actual keys
+		# Stored keys
+		if hasattr(self, "_keys"):
+			del self._keys
 		self._keys = []
 
-		# Table that stores hashes of keys
-		self._hashes = []
-
-		# Table that stores neighborhood info for each index
-		# MSB: the given index; LSB: the index _nbhd_size - 1 away
-		self._nbhds = self._make_nbhds(self._nbhd_size, self._size)
-
-		# The main table, used to map keys to values
-		self._indices = self._make_indices(self._size)
+		# Main table, storing auxiliary index and neighbors for each index
+		if hasattr(self, "_lookup_table"):
+			del self._lookup_table
+		self._lookup_table, self._pack_fmt = self._make_lookup_table(self._size)
 
 	def copy(self):
 		"""
@@ -451,9 +539,9 @@ class HopscotchDict(MutableMapping):
 
 		:returns: The value associated with the given key
 		"""
-		idx = self._lookup(key)
+		_, idx = self._lookup(key)
 		if idx is not None:
-			return self._values[self._indices[idx]]
+			return self._values[idx]
 		else:
 			raise KeyError(key)
 
@@ -465,55 +553,58 @@ class HopscotchDict(MutableMapping):
 		:param key: The key to set
 		:param value: The value to map the key to
 		"""
-		exp_idx = abs(hash(key)) % self._size
-		act_idx = self._lookup(key)
+		# The index key should map to in _lookup_table if it hasn't been evicted
+		expected_lookup_idx = abs(hash(key)) % self._size
+
+		# The index of the key in _keys and its related value in _values
+		_, data_idx = self._lookup(key)
 
 		# Overwrite an existing key with new data
-		if act_idx is not None:
-			self._keys[self._indices[act_idx]] = key
-			self._values[self._indices[act_idx]] = value
-			self._hashes[self._indices[act_idx]] = abs(hash(key))
-			if not (len(self._keys) == len(self._values) == len(self._hashes)):
+		if data_idx is not None:
+			self._keys[data_idx] = key
+			self._values[data_idx] = value
+			if not (len(self._keys) == len(self._values)):
 				raise RuntimeError((
 					u"Number of keys {0}; "
-					u"number of values {1}; "
-					u"number of hashes {2}").format(
+					u"number of values {1}; ").format(
 						len(self._keys),
-						len(self._values),
-						len(self._hashes)))
+						len(self._values)))
 			return
 
-		# Move existing data out of index to accomodate new data
-		elif self._indices[exp_idx] != self.FREE_ENTRY:
-			try:
-				self._free_up(exp_idx)
+		# If there is an empty neighbor of expected_lookup_idx,
+		# the entry for the new key/value can be stored there
+		nearest_neighbor = self._get_open_neighbor(expected_lookup_idx)
+		if nearest_neighbor is not None:
+			nbhd_idx = nearest_neighbor - expected_lookup_idx
+			self._set_neighbor(expected_lookup_idx, nbhd_idx)
+			self._set_lookup_index_info(nearest_neighbor, data=self._count)
+			self._keys.append(key)
+			self._values.append(value)
+			self._count += 1
 
-			# No way to keep neighborhood invariant, resize and try again
+		else:
+			# Free up a neighbor of the expected index to accomodate the new key/value
+			try:
+				self._free_up(expected_lookup_idx)
+
+			# No way to keep neighborhood invariant, must resize first
 			except RuntimeError:
 				if self._size < 2**16:
 					self._resize(self._size * 4)
 				else:
 					self._resize(self._size * 2)
 
+			# There should now be an available neighbor of the expected index, try again
+			finally:
 				self.__setitem__(key, value)
 				return
 
-		# Index never previously stored data or it was successfully moved,
-		# Either way, add the new data to its expected index
-		self._indices[exp_idx] = self._count
-		self._keys.append(key)
-		self._values.append(value)
-		self._hashes.append(abs(hash(key)))
-		self._set_neighbor(exp_idx, 0)
-		self._count += 1
-		if not (len(self._keys) == len(self._values) == len(self._hashes)):
+		if len(self._keys) != len(self._values):
 			raise RuntimeError((
 				u"Number of keys {0}; "
-				u"number of values {1}; "
-				u"number of hashes {2}").format(
+				u"number of values {1}; ").format(
 					len(self._keys),
-					len(self._values),
-					len(self._hashes)))
+					len(self._values)))
 
 		if self._count / self._size >= self.MAX_DENSITY:
 			if self._size < 2**16:
@@ -521,28 +612,44 @@ class HopscotchDict(MutableMapping):
 			else:
 				self._resize(self._size * 2)
 
-
 	def __delitem__(self, key):
 		"""
 		Remove the value the given key maps to
 		"""
-		act_idx = self._lookup(key)
-		exp_idx = abs(hash(key)) % self._size
+		# The index key should map to in _lookup_table if it hasn't been evicted
+		expected_lookup_idx = abs(hash(key)) % self._size
 
-		if act_idx is not None:
-			# If the key's associated data isn't the last entry in their
-			# respective lists, swap with the last entries to not leave a hole
-			# in said tables and update the _indices pointer
-			if self._indices[act_idx] != self._count - 1:
-				last_hash = self._hashes[-1]
+		# The index key actually maps to in _lookup_table,
+		# and the index its related value maps to in _values
+		lookup_idx, data_idx = self._lookup(key)
+
+		# Key not in dict
+		if data_idx is None:
+			raise KeyError(key)
+
+		# If the key and its associated value aren't the last entries in their respective lists,
+		# swap with the last entries to not leave a hole in said lists
+		else:
+			if data_idx != self._count - 1:
 				last_key = self._keys[-1]
 				last_val = self._values[-1]
-				last_idx = self._lookup(last_key)
+				last_data_lookup_idx = abs(hash(last_key)) % self._size
 
-				self._keys[self._indices[act_idx]] = last_key
-				self._values[self._indices[act_idx]] = last_val
-				self._hashes[self._indices[act_idx]] = last_hash
-				self._indices[last_idx] = self._indices[act_idx]
+				# Find the index in _lookup_table which points
+				# to the data at the end of the lists
+				_, nbhd = self._get_lookup_index_info(last_data_lookup_idx)
+				for neighbor in self._get_displaced_neighbors(last_data_lookup_idx, nbhd,
+															  self._nbhd_size, self._size):
+					neighbor_data_idx, _ = self._get_lookup_index_info(neighbor)
+
+					if neighbor_data_idx == self._count - 1:
+						last_data_lookup_idx = neighbor
+						break
+
+				# Move the data to be removed to the end of each list and update indices
+				self._keys[data_idx] = last_key
+				self._values[data_idx] = last_val
+				self._set_lookup_index_info(last_data_lookup_idx, data=data_idx)
 
 			# Update the neighborhood of the index the key to be removed is
 			# supposed to point to, since the key to be removed must be
@@ -550,24 +657,20 @@ class HopscotchDict(MutableMapping):
 
 			# Checking if the actual index for the key is less than the expected
 			# index is unneccessary because data is only displaced forward in
-			# _indices
-			if act_idx != exp_idx:
-				self._clear_neighbor(exp_idx, act_idx - exp_idx)
+			# _lookup_table
+			if lookup_idx != expected_lookup_idx:
+				nbhd_idx = lookup_idx - expected_lookup_idx
+				self._clear_neighbor(expected_lookup_idx, nbhd_idx)
 			else:
-				self._clear_neighbor(act_idx, 0)
+				self._clear_neighbor(expected_lookup_idx, 0)
 
 			# Remove the last item from the variable tables, either the actual
 			# data to be removed or what was originally at the end before
 			# it was copied over the data to be removed
-			self._keys.pop()
-			self._hashes.pop()
-			self._values.pop()
-			self._indices[act_idx] = self.FREE_ENTRY
+			del self._keys[-1]
+			del self._values[-1]
+			self._set_lookup_index_info(lookup_idx, data=self.FREE_ENTRY)
 			self._count -= 1
-
-		# Key not in dict
-		else:
-			raise KeyError(key)
 
 	def __contains__(self, key):
 		"""
@@ -575,10 +678,8 @@ class HopscotchDict(MutableMapping):
 
 		:returns: True if the key exists, False otherwise
 		"""
-		if self._lookup(key) is not None:
-			return True
-		else:
-			return False
+		_, idx = self._lookup(key)
+		return idx is not None
 
 	def __eq__(self, other):
 		"""

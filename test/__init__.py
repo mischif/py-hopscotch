@@ -8,7 +8,7 @@
 ################################################################################
 
 from os import getenv
-from sys import version_info
+from sys import maxsize
 
 from hypothesis import HealthCheck, settings
 from hypothesis.strategies import (booleans,
@@ -28,8 +28,17 @@ from hypothesis.strategies import (booleans,
 settings.register_profile(u"ci", database=None, deadline=300, suppress_health_check=[HealthCheck.too_slow])
 settings.load_profile(getenv(u"HYPOTHESIS_PROFILE", u"default"))
 
-dict_keys = deferred(lambda: one_of(none(), booleans(), integers(), floats(allow_infinity=False, allow_nan=False), complex_numbers(allow_infinity=False, allow_nan=False), text(), tuples(dict_keys), frozensets(dict_keys)))
+max_dict_entries = maxsize if getenv(u"HYPOTHESIS_PROFILE", u"default") == "ci" else 2 ** 24
+
+dict_keys = deferred(lambda: one_of(none(),
+									booleans(),
+									integers(),
+									floats(allow_infinity=False, allow_nan=False),
+									complex_numbers(allow_infinity=False, allow_nan=False),
+									text(),
+									tuples(dict_keys),
+									frozensets(dict_keys)))
 
 dict_values = deferred(lambda: one_of(dict_keys, lists(dict_keys), sample_dict))
 
-sample_dict = dictionaries(dict_keys, dict_values, max_size=100)
+sample_dict = dictionaries(dict_keys, dict_values, max_size=max_dict_entries)
