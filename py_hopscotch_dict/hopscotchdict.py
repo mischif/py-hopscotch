@@ -317,6 +317,9 @@ class HopscotchDict(MutableMapping):
 			expected_lookup_idx = abs(hash(key)) % self._size
 
 			nearest_neighbor = self._get_open_neighbor(expected_lookup_idx)
+			if nearest_neighbor is None:
+				self._free_up(expected_lookup_idx)
+				nearest_neighbor = self._get_open_neighbor(expected_lookup_idx)
 			nbhd_idx = (nearest_neighbor - expected_lookup_idx) % self._size
 			self._set_neighbor(expected_lookup_idx, nbhd_idx)
 			self._set_lookup_index_info(nearest_neighbor, data=data_idx)
