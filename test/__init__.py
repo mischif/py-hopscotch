@@ -7,10 +7,9 @@
 #       Released under version 3.0 of the Non-Profit Open Source License       #
 ################################################################################
 
-from os import getenv
 from sys import maxsize
 
-from hypothesis import HealthCheck, settings
+from hypothesis import settings
 from hypothesis.strategies import (booleans,
 								   complex_numbers,
 								   deferred,
@@ -25,10 +24,7 @@ from hypothesis.strategies import (booleans,
 								   tuples,
 								   )
 
-settings.register_profile(u"ci", database=None, deadline=1000, suppress_health_check=[HealthCheck.too_slow])
-settings.load_profile(getenv(u"HYPOTHESIS_PROFILE", u"default"))
-
-max_dict_entries = 2*28 if getenv(u"HYPOTHESIS_PROFILE", u"default") == "ci" else 2 ** 20
+max_dict_entries = maxsize if settings._current_profile == "ci" else 2 ** 20
 
 dict_keys = deferred(lambda: one_of(none(),
 									booleans(),
