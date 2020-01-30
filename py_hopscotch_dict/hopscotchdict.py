@@ -173,8 +173,7 @@ class HopscotchDict(MutableMapping):
 			# to find a neighbor that can be displaced into the open location
 			for idx in range(1, self._nbhd_size + 1):
 				idx = (nearest_neighbor - self._nbhd_size + idx) % self._size
-				_, nbhd = self._get_lookup_index_info(idx)
-				idx_neighbors = self._get_displaced_neighbors(idx, nbhd, self._nbhd_size, self._size)
+				_, idx_neighbors = self._get_lookup_index_info(idx)
 
 				closest_idx = None
 				if len(idx_neighbors) > 0:
@@ -219,7 +218,8 @@ class HopscotchDict(MutableMapping):
 		:param lookup_idx: the index to find info for
 
 		:return: (tuple) The index into _keys/_values (or the empty sentinel),
-						 and the neighborhood at the given index
+						 and a list of all indices that have data related to
+						 keys which would be stored at the given index
 		"""
 		if lookup_idx < 0:
 			raise ValueError(u"Indexes cannot be negative")
@@ -227,7 +227,9 @@ class HopscotchDict(MutableMapping):
 			raise ValueError(u"Index {0} outside array".format(lookup_idx))
 
 		lookup_offset = calcsize(self._pack_fmt) * lookup_idx
-		return unpack_from(self._pack_fmt, self._lookup_table, lookup_offset)
+		data_idx, nbhd = unpack_from(self._pack_fmt, self._lookup_table, lookup_offset)
+		neighbors = self._get_displaced_neighbors(lookup_idx, nbhd, self._nbhd_size, self._size)
+		return data_idx, neighbors
 
 	def _get_open_neighbor(self, lookup_idx):
 		"""
@@ -269,9 +271,9 @@ class HopscotchDict(MutableMapping):
 		data_idx = None
 		lookup_idx = abs(hash(key)) % self._size
 
-		_, nbhd = self._get_lookup_index_info(lookup_idx)
+		_, neighbors = self._get_lookup_index_info(lookup_idx)
 
-		for neighbor in self._get_displaced_neighbors(lookup_idx, nbhd, self._nbhd_size, self._size):
+		for neighbor in neighbors:
 			neighbor_data_idx, _ = self._get_lookup_index_info(neighbor)
 
 			if neighbor_data_idx < 0:

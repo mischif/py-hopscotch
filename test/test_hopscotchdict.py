@@ -8,6 +8,7 @@
 ################################################################################
 
 from copy import copy
+from struct import calcsize, unpack_from
 from sys import version_info
 
 import pytest
@@ -28,8 +29,8 @@ def test_get_lookup_index_info(gen_dict, lookup_idx):
 		with pytest.raises(ValueError):
 			hd._get_lookup_index_info(lookup_idx)
 	else:
-		data_idx, nbhd = hd._get_lookup_index_info(lookup_idx)
-		for idx in hd._get_displaced_neighbors(lookup_idx, nbhd, hd._nbhd_size, hd._size):
+		data_idx, neighbors = hd._get_lookup_index_info(lookup_idx)
+		for idx in neighbors:
 			data_idx, _ = hd._get_lookup_index_info(idx)
 			assert abs(hash(hd._keys[data_idx])) % hd._size == lookup_idx
 
@@ -45,7 +46,11 @@ def test_set_lookup_index_info(gen_dict, lookup_idx, data_idx, nbhd):
 		nbhd = min(nbhd, 2 ** hd._nbhd_size - 1) 
 		data_idx = min(nbhd, 2 ** (hd._nbhd_size - 1) - 1)
 		hd._set_lookup_index_info(lookup_idx, data=data_idx, nbhd=nbhd)
-		assert hd._get_lookup_index_info(lookup_idx) == (data_idx, nbhd)
+
+		lookup_offset = calcsize(hd._pack_fmt) * lookup_idx
+		retrieved_idx, retrieved_nbhd = unpack_from(hd._pack_fmt, hd._lookup_table, lookup_offset)
+
+		assert (retrieved_idx, retrieved_nbhd) == (data_idx, nbhd)
 
 
 @given(sample_dict, integers())
@@ -97,10 +102,10 @@ def test_clear_neighbor():
 		hd._clear_neighbor(0, 10)
 
 	lookup_idx, _ = hd._lookup("test_clear_neighbor")
-	assert hd._get_lookup_index_info(lookup_idx)[1] != 0
+	assert len(hd._get_lookup_index_info(lookup_idx)[1]) > 0
 
 	hd._clear_neighbor(lookup_idx, 0)
-	assert hd._get_lookup_index_info(lookup_idx)[1] == 0
+	assert len(hd._get_lookup_index_info(lookup_idx)[1]) == 0
 
 
 @pytest.mark.parametrize("scenario", ["unnecessary", "far", "displaced"],
@@ -121,16 +126,16 @@ def test_valid_free_up(scenario):
 		hd._free_up(0)
 
 		# Nothing was stored at the index, so nothing to do
-		data_idx, nbhd = hd._get_lookup_index_info(0)
+		data_idx, neighbors = hd._get_lookup_index_info(0)
 		assert data_idx == hd.FREE_ENTRY
-		assert nbhd == 0
+		assert len(neighbors) == 0
 
 		hd._free_up(4)
 
 		# The index has an open neighbor, so nothing to do
-		data_idx, nbhd = hd._get_lookup_index_info(4)
+		data_idx, neighbors = hd._get_lookup_index_info(4)
 		assert data_idx == 2
-		assert nbhd == 1
+		assert neighbors == [4]
 
 	elif scenario == "far":
 		for i in range(1, 11):
@@ -139,23 +144,23 @@ def test_valid_free_up(scenario):
 		# Entry at index 4 moves to 11
 		hd._free_up(1)
 
-		data_idx, nbhd = hd._get_lookup_index_info(1)
+		data_idx, neighbors = hd._get_lookup_index_info(1)
 
 		# The entry at index 1 will not move as a neighbor will open up first
 		assert data_idx == 0
-		assert nbhd == 1
+		assert neighbors == [1]
 
-		data_idx, nbhd = hd._get_lookup_index_info(4)
+		data_idx, neighbors = hd._get_lookup_index_info(4)
 
 		# Index 4 in _lookup_table should be empty
 		assert data_idx == hd.FREE_ENTRY
-		assert nbhd & 1 << 7 > 0
+		assert neighbors == [11]
 
-		data_idx, nbhd = hd._get_lookup_index_info(11)
+		data_idx, neighbors = hd._get_lookup_index_info(11)
 
 		# Index 11 in _lookup_table should point to index 3 in other lists
 		assert data_idx == 3
-		assert nbhd == 0
+		assert len(neighbors) == 0
 
 	elif scenario == "displaced":
 		hd._resize(16)
@@ -168,13 +173,13 @@ def test_valid_free_up(scenario):
 
 		del hd[30]
 
-		assert hd._get_lookup_index_info(1) == (3, 0)
-		assert hd._get_lookup_index_info(15) == (hd.FREE_ENTRY, 0)
+		assert hd._get_lookup_index_info(1) == (3, [])
+		assert hd._get_lookup_index_info(15) == (hd.FREE_ENTRY, [])
 
 		hd._free_up(1)
 
-		assert hd._get_lookup_index_info(1) == (hd.FREE_ENTRY, 0)
-		assert hd._get_lookup_index_info(15) == (3, 0)
+		assert hd._get_lookup_index_info(1) == (hd.FREE_ENTRY, [])
+		assert hd._get_lookup_index_info(15) == (3, [])
 
 
 @pytest.mark.parametrize("scenario", ["full_wraps", "full", "last_distant"],
@@ -229,13 +234,16 @@ def test_get_displaced_neighbors(with_collisions):
 
 		assert hd._size == 8
 
-		data_idx, nbhd = hd._get_lookup_index_info(1)
+		lookup_offset = calcsize(hd._pack_fmt) * 1
+		_, nbhd = unpack_from(hd._pack_fmt, hd._lookup_table, lookup_offset)
 		assert hd._get_displaced_neighbors(1, nbhd, hd._nbhd_size, hd._size) == [1, 2, 4]
 
-		data_idx, nbhd = hd._get_lookup_index_info(3)
+		lookup_offset = calcsize(hd._pack_fmt) * 3
+		_, nbhd = unpack_from(hd._pack_fmt, hd._lookup_table, lookup_offset)
 		assert hd._get_displaced_neighbors(3, nbhd, hd._nbhd_size, hd._size) == [3]
 
-		data_idx, nbhd = hd._get_lookup_index_info(6)
+		lookup_offset = calcsize(hd._pack_fmt) * 6
+		_, nbhd = unpack_from(hd._pack_fmt, hd._lookup_table, lookup_offset)
 		assert hd._get_displaced_neighbors(6, nbhd, hd._nbhd_size, hd._size) == [6, 7]
 
 	else:
@@ -249,7 +257,8 @@ def test_get_displaced_neighbors(with_collisions):
 			hd[i] = "test_get_displaced_neighbors_{}".format(i)
 
 		for i in range(6):
-			data_idx, nbhd = hd._get_lookup_index_info(i)
+			lookup_offset = calcsize(hd._pack_fmt) * i
+			_, nbhd = unpack_from(hd._pack_fmt, hd._lookup_table, lookup_offset)
 			assert hd._get_displaced_neighbors(i, nbhd, hd._nbhd_size, hd._size) == [i]
 
 
@@ -332,16 +341,16 @@ def test_set_neighbor(lookup_idx, nbhd_idx):
 		with pytest.raises(ValueError):
 			hd._set_neighbor(lookup_idx, nbhd_idx)
 	else:
-		_, nbhd = hd._get_lookup_index_info(lookup_idx)
 		hd._set_neighbor(lookup_idx, nbhd_idx)
-		assert hd._get_lookup_index_info(lookup_idx)[1] & 1 << nbhd_idx > 0
+		_, neighbors = hd._get_lookup_index_info(lookup_idx)
+		assert (lookup_idx + nbhd_idx) % hd._size in neighbors
 
 	lookup_idx, _ = hd._lookup("test_set_neighbor")
-	_, nbhd = hd._get_lookup_index_info(lookup_idx)
-	if nbhd != 255:
+	_, neighbors = hd._get_lookup_index_info(lookup_idx)
+	if len(neighbors) != hd._nbhd_size:
 		for i in range(8):
 			hd._set_neighbor(lookup_idx, i)
-		assert hd._get_lookup_index_info(lookup_idx)[1] == 255
+		assert len(hd._get_lookup_index_info(lookup_idx)[1]) == hd._nbhd_size
 
 
 def test_clear():
@@ -360,9 +369,9 @@ def test_clear():
 	assert len(hd._values) == 0
 
 	for lookup_idx in range(hd._size):
-		data_idx, nbhd = hd._get_lookup_index_info(lookup_idx)
+		data_idx, neighbors = hd._get_lookup_index_info(lookup_idx)
 		assert data_idx == hd.FREE_ENTRY
-		assert nbhd == 0
+		assert len(neighbors) == 0
 
 
 def test_bare_init():
@@ -409,9 +418,9 @@ def test_setitem_happy_path(gen_dict):
 	for key in gen_dict:
 		assert hd[key] == gen_dict[key]
 		expected_lookup_idx = abs(hash(key)) % hd._size
-		_, nbhd = hd._get_lookup_index_info(expected_lookup_idx)
+		_, neighbors = hd._get_lookup_index_info(expected_lookup_idx)
 		lookup_idx, _ = hd._lookup(key)
-		assert lookup_idx in hd._get_displaced_neighbors(expected_lookup_idx, nbhd, hd._nbhd_size, hd._size)
+		assert lookup_idx in neighbors
 
 
 @pytest.mark.parametrize("scenario",
@@ -547,9 +556,9 @@ def test_delitem(scenario):
 		assert len(hd) == 0
 
 		for i in range(hd._size):
-			data_idx, nbhd = hd._get_lookup_index_info(i)
+			data_idx, neighbors = hd._get_lookup_index_info(i)
 			assert data_idx == hd.FREE_ENTRY
-			assert nbhd == 0
+			assert len(neighbors) == 0
 
 	elif scenario == "missing":
 		with pytest.raises(KeyError):
@@ -771,13 +780,10 @@ class HopscotchStateMachine(RuleBasedStateMachine):
 	@invariant()
 	def valid_neighborhoods(self):
 		for lookup_idx in range(self.d._size):
-			_, nbhd = self.d._get_lookup_index_info(lookup_idx)
-			if nbhd != 0:
-				for neighbor in self.d._get_displaced_neighbors(lookup_idx, nbhd,
-																self.d._nbhd_size,
-																self.d._size):
-					data_idx = self.d._get_lookup_index_info(neighbor)[0]
-					assert abs(hash(self.d._keys[data_idx])) % self.d._size == lookup_idx
+			_, neighbors = self.d._get_lookup_index_info(lookup_idx)
+			for neighbor in neighbors:
+				data_idx = self.d._get_lookup_index_info(neighbor)[0]
+				assert abs(hash(self.d._keys[data_idx])) % self.d._size == lookup_idx
 
 	@invariant()
 	def no_missing_data(self):
