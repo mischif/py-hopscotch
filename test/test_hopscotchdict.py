@@ -13,7 +13,7 @@ from sys import version_info
 
 import pytest
 
-from hypothesis import example, given, seed
+from hypothesis import example, given, seed, settings
 from hypothesis.strategies import integers
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
@@ -806,4 +806,5 @@ class HopscotchStateMachine(RuleBasedStateMachine):
 		else:
 			del self.d[k]
 
+HopscotchStateMachine.TestCase.settings = settings(max_examples=50)
 test_hopscotch_dict = HopscotchStateMachine.TestCase
