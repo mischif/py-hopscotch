@@ -10,22 +10,15 @@
 from __future__ import division
 
 from array import array
+from collections.abc import MutableMapping
 from struct import calcsize, pack, pack_into, unpack_from
 from sys import maxsize, version_info
-
-try:
-	from collections.abc import MutableMapping
-except ImportError:
-	# future_builtins import will fail for < 2.6 (which isn't supported)
-	from future_builtins import zip, map
-	from collections import MutableMapping
 
 
 class HopscotchDict(MutableMapping):
 
 	# Prevent default creation of __dict__, which should save space if many
 	# instances of HopscotchDict are used at once
-	# (Only true on 3.x, as 2.x creates __dict__ regardless)
 	__slots__ = ("_count", "_keys", "_lookup_table", "_nbhd_size", "_pack_fmt",
 				 "_size", "_values")
 
@@ -526,17 +519,6 @@ class HopscotchDict(MutableMapping):
 		# Use clear function to do initial setup for new tables
 		if not hasattr(self, "_size"):
 			self.clear()
-
-		# Since this code expects to be run in Python 3 by default,
-		# Handle Python 2 API expectations explicitly
-		if version_info.major < 3:
-			self.iterkeys = self.keys
-			self.itervalues = self.values
-			self.iteritems = self.items
-
-			self.keys = lambda: self._keys
-			self.values = lambda: self._values
-			self.items = lambda: [(k, v) for (k, v) in self.iteritems()]
 
 		self.update(*args, **kwargs)
 
