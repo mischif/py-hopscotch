@@ -1,0 +1,86 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [3.6, 3.7, 3.8, pypy3]
+        os: [ubuntu-latest, windows-latest]
+        exclude:
+          - os: windows-latest
+            python-version: pypy3
+
+    env:
+      OS: ${{ matrix.os }}
+      PYTHON: ${{ matrix.python-version }}
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test dependencies
+        run: pip install .[test]
+
+      - name: Run tests
+        run: make ci-test
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          # env_vars: PYTHON,OS
+          fail_ci_if_error: true
+
+  release:
+    name: Publish Release
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.6
+
+      - name: Fetch tag history
+        run: git fetch --prune --unshallow --tags
+
+      - name: Prepare build dependencies
+        run: pip install -U pep517 twine setuptools
+
+      - name: Build distributions
+        run: make build
+
+      - name: Get release version
+        run: |
+          echo "::set-env name=version::$(python setup.py --version)"
+          echo release version is $(python setup.py --version)
+
+      - name: Check distributions
+        run: twine check dist/*
+
+      - name: Publish TestPyPI distributions
+        if: contains(env.version, 'rc') || contains(env.version, 'dev')
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: __token__
+          password: ${{ secrets.TESTPYPI }}
+          repository_url: https://test.pypi.org/legacy/
+
+      - name: Publish PyPI distributions
+        if: (!contains(env.version, 'rc') && !contains(env.version, 'dev'))
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI }}
