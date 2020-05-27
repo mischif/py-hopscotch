@@ -1,7 +1,7 @@
 py-hopscotch-dict
 =================
 
-[![GitHub Workflow](https://img.shields.io/github/workflow/status/mischif/py-hopscotch-dict/Pipeline?logo=github&style=for-the-badge)](https://github.com/mischif/py-hopscotch-dict)
+[![GitHub Workflow](https://img.shields.io/github/workflow/status/mischif/py-hopscotch-dict/Pipeline?logo=github&style=for-the-badge)](https://github.com/mischif/py-hopscotch-dict/actions)
 [![Codecov](https://img.shields.io/codecov/c/github/mischif/py-hopscotch-dict?logo=codecov&style=for-the-badge)](https://codecov.io/gh/mischif/py-hopscotch-dict)
 [![Python Versions](https://img.shields.io/pypi/pyversions/py-hopscotch-dict?style=for-the-badge)](https://pypi.org/project/py-hopscotch-dict/)
 [![Package Version](https://img.shields.io/pypi/v/py-hopscotch-dict?style=for-the-badge)](https://pypi.org/project/py-hopscotch-dict/)
