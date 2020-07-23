@@ -9,7 +9,6 @@
 
 from copy import copy
 from struct import calcsize, unpack_from
-from sys import version_info
 
 import pytest
 
@@ -629,12 +628,7 @@ def test_eq_and_neq(scenario):
 @given(sample_dict)
 def test_keys(gen_dict):
 	hd = HopscotchDict(gen_dict)
-
-	keys = hd.keys()
-	if version_info.major < 3:
-		assert isinstance(keys, list)
-	else:
-		keys = list(keys)
+	keys = list(hd.keys())
 
 	for key in gen_dict:
 		assert key in keys
@@ -643,12 +637,7 @@ def test_keys(gen_dict):
 @given(sample_dict)
 def test_values(gen_dict):
 	hd = HopscotchDict(gen_dict)
-
-	vals = hd.values()
-	if version_info.major < 3:
-		assert isinstance(vals, list)
-	else:
-		vals = list(vals)
+	vals = list(hd.values())
 
 	for key in gen_dict:
 		assert gen_dict[key] in vals
@@ -657,12 +646,7 @@ def test_values(gen_dict):
 @given(sample_dict)
 def test_items(gen_dict):
 	hd = HopscotchDict(gen_dict)
-
-	items = hd.items()
-	if version_info.major < 3:
-		assert isinstance(items, list)
-	else:
-		items = list(items)
+	items = list(hd.items())
 
 	for item_tuple in gen_dict.items():
 		assert item_tuple in items

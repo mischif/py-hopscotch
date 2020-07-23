@@ -7,8 +7,6 @@
 #       Released under version 3.0 of the Non-Profit Open Source License       #
 ################################################################################
 
-from __future__ import division
-
 from array import array
 from collections.abc import MutableMapping
 from struct import calcsize, pack, pack_into, unpack_from
@@ -50,9 +48,9 @@ class HopscotchDict(MutableMapping):
 						be stored at lookup_idx were it empty at the time of insertion
 		"""
 		if lookup_idx < 0:
-			raise ValueError(u"Indexes cannot be negative")
+			raise ValueError("Indexes cannot be negative")
 		elif lookup_idx >= max_size:
-			raise ValueError(u"Index {0} outside array".format(lookup_idx))
+			raise ValueError("Index {0} outside array".format(lookup_idx))
 
 		result = []
 
@@ -73,7 +71,7 @@ class HopscotchDict(MutableMapping):
 		:return: (bytearray) The desired table
 		"""
 		if table_size < 0:
-			raise ValueError(u"Lookup table cannot have negative length")
+			raise ValueError("Lookup table cannot have negative length")
 
 		table_log_size = table_size.bit_length()
 
@@ -97,11 +95,11 @@ class HopscotchDict(MutableMapping):
 		:param nbhd_idx: The neighbor in the neighborhood of _lookup_table to set unoccupied
 		"""
 		if lookup_idx < 0 or nbhd_idx < 0:
-			raise ValueError(u"Indexes cannot be negative")
+			raise ValueError("Indexes cannot be negative")
 		elif lookup_idx >= self._size:
-			raise ValueError(u"Index {0} outside array".format(lookup_idx))
+			raise ValueError("Index {0} outside array".format(lookup_idx))
 		elif nbhd_idx >= self._nbhd_size:
-			raise ValueError(u"Trying to clear neighbor outside neighborhood")
+			raise ValueError("Trying to clear neighbor outside neighborhood")
 
 		lookup_offset = calcsize(self._pack_fmt) * lookup_idx
 		value_idx, nbhd = unpack_from(self._pack_fmt, self._lookup_table, lookup_offset)
@@ -119,9 +117,9 @@ class HopscotchDict(MutableMapping):
 						   nieighborhood for
 		"""
 		if target_idx < 0:
-			raise ValueError(u"Indexes cannot be negative")
+			raise ValueError("Indexes cannot be negative")
 		elif target_idx >= self._size:
-			raise ValueError(u"Index {0} outside array".format(target_idx))
+			raise ValueError("Index {0} outside array".format(target_idx))
 
 		# Attempting to free up an index that has an open neighbor should be a no-op
 		if self._get_open_neighbor(target_idx) is not None:
@@ -193,7 +191,7 @@ class HopscotchDict(MutableMapping):
 				# given index and the open index is filled with data displaced from other indices,
 				# and the invariant cannot be maintained without a resize
 				elif idx == nearest_neighbor - 1:
-					raise RuntimeError((u"No space available before open index"))
+					raise RuntimeError(("No space available before open index"))
 
 			# If the index that had its data punted is inside the target index's neighborhood,
 			# the success condition has been attained
@@ -201,7 +199,7 @@ class HopscotchDict(MutableMapping):
 				return
 
 		# No open indices exist between the given index and the end of the array
-		raise RuntimeError(u"Could not open index while maintaining invariant")
+		raise RuntimeError("Could not open index while maintaining invariant")
 
 	def _get_lookup_index_info(self, lookup_idx):
 		"""
@@ -215,9 +213,9 @@ class HopscotchDict(MutableMapping):
 						 keys which would be stored at the given index
 		"""
 		if lookup_idx < 0:
-			raise ValueError(u"Indexes cannot be negative")
+			raise ValueError("Indexes cannot be negative")
 		elif lookup_idx >= self._size:
-			raise ValueError(u"Index {0} outside array".format(lookup_idx))
+			raise ValueError("Index {0} outside array".format(lookup_idx))
 
 		lookup_offset = calcsize(self._pack_fmt) * lookup_idx
 		data_idx, nbhd = unpack_from(self._pack_fmt, self._lookup_table, lookup_offset)
@@ -235,9 +233,9 @@ class HopscotchDict(MutableMapping):
 					   currently in use
 		"""
 		if lookup_idx < 0:
-			raise ValueError(u"Indexes cannot be negative")
+			raise ValueError("Indexes cannot be negative")
 		elif lookup_idx >= self._size:
-			raise ValueError(u"Index {0} outside array".format(lookup_idx))
+			raise ValueError("Index {0} outside array".format(lookup_idx))
 
 		result = None
 
@@ -271,8 +269,8 @@ class HopscotchDict(MutableMapping):
 
 			if neighbor_data_idx < 0:
 				raise RuntimeError((
-					u"Index {0} has supposed displaced neighbor that points to "
-					u"free index").format(lookup_idx))
+					"Index {0} has supposed displaced neighbor that points to "
+					"free index").format(lookup_idx))
 
 			if self._keys[neighbor_data_idx] == key:
 					data_idx = neighbor_data_idx
@@ -292,7 +290,7 @@ class HopscotchDict(MutableMapping):
 		"""
 		# Dict size is a power of two to make modulo operations quicker
 		if new_size & new_size - 1:
-			raise ValueError(u"New size for dict not a power of 2")
+			raise ValueError("New size for dict not a power of 2")
 
 		# Neighborhoods must be at least as large as the base-2 logarithm of
 		# the dict size
@@ -303,7 +301,7 @@ class HopscotchDict(MutableMapping):
 		if resized_nbhd_size > self._nbhd_size:
 			if resized_nbhd_size > self.MAX_NBHD_SIZE:
 				raise ValueError(
-					u"Resizing requires too-large neighborhood")
+					"Resizing requires too-large neighborhood")
 			self._nbhd_size = min(s for s in self.ALLOWED_NBHD_SIZES if s >= resized_nbhd_size)
 
 		self._size = new_size
@@ -329,9 +327,9 @@ class HopscotchDict(MutableMapping):
 		:param nbhd: New neighborhood information, or None to leave alone
 		"""
 		if lookup_idx < 0:
-			raise ValueError(u"Indexes cannot be negative")
+			raise ValueError("Indexes cannot be negative")
 		elif lookup_idx >= self._size:
-			raise ValueError(u"Index {0} outside array".format(lookup_idx))
+			raise ValueError("Index {0} outside array".format(lookup_idx))
 
 		lookup_offset = calcsize(self._pack_fmt) * lookup_idx
 		data_idx, neighbors = unpack_from(self._pack_fmt, self._lookup_table, lookup_offset)
@@ -353,11 +351,11 @@ class HopscotchDict(MutableMapping):
 		:param nbhd_idx: The neighbor in the neighborhood of lookup_idx to set occupied
 		"""
 		if lookup_idx < 0 or nbhd_idx < 0:
-			raise ValueError(u"Indexes cannot be negative")
+			raise ValueError("Indexes cannot be negative")
 		elif lookup_idx >= self._size:
-			raise ValueError(u"Index {0} outside array".format(lookup_idx))
+			raise ValueError("Index {0} outside array".format(lookup_idx))
 		elif nbhd_idx >= self._nbhd_size:
-			raise ValueError(u"Trying to clear neighbor outside neighborhood")
+			raise ValueError("Trying to clear neighbor outside neighborhood")
 
 		lookup_offset = calcsize(self._pack_fmt) * lookup_idx
 		value_idx, nbhd = unpack_from(self._pack_fmt, self._lookup_table, lookup_offset)
@@ -557,8 +555,8 @@ class HopscotchDict(MutableMapping):
 			self._values[data_idx] = value
 			if not (len(self._keys) == len(self._values)):
 				raise RuntimeError((
-					u"Number of keys {0}; "
-					u"number of values {1}; ").format(
+					"Number of keys {0}; "
+					"number of values {1}; ").format(
 						len(self._keys),
 						len(self._values)))
 			return
@@ -593,8 +591,8 @@ class HopscotchDict(MutableMapping):
 
 		if len(self._keys) != len(self._values):
 			raise RuntimeError((
-				u"Number of keys {0}; "
-				u"number of values {1}; ").format(
+				"Number of keys {0}; "
+				"number of values {1}; ").format(
 					len(self._keys),
 					len(self._values)))
 
@@ -711,7 +709,7 @@ class HopscotchDict(MutableMapping):
 
 		:returns: A string that could be used to create an equivalent representation
 		"""
-		return u"HopscotchDict({0})".format(self.__str__())
+		return "HopscotchDict({0})".format(self.__str__())
 
 	def __reversed__(self):
 		"""
@@ -729,7 +727,7 @@ class HopscotchDict(MutableMapping):
 		"""
 		stringified = []
 
-		for (key, val) in getattr(self, 'iteritems', self.items)():
-			stringified.append(u"{0!r}: {1!r}".format(key, val))
+		for (key, val) in self.items():
+			stringified.append("{0!r}: {1!r}".format(key, val))
 
-		return u"{{{0}}}".format(u", ".join(stringified))
+		return "{{{0}}}".format(", ".join(stringified))
