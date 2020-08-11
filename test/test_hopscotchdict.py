@@ -626,33 +626,6 @@ def test_eq_and_neq(scenario):
 
 
 @given(sample_dict)
-def test_keys(gen_dict):
-	hd = HopscotchDict(gen_dict)
-	keys = list(hd.keys())
-
-	for key in gen_dict:
-		assert key in keys
-
-
-@given(sample_dict)
-def test_values(gen_dict):
-	hd = HopscotchDict(gen_dict)
-	vals = list(hd.values())
-
-	for key in gen_dict:
-		assert gen_dict[key] in vals
-
-
-@given(sample_dict)
-def test_items(gen_dict):
-	hd = HopscotchDict(gen_dict)
-	items = list(hd.items())
-
-	for item_tuple in gen_dict.items():
-		assert item_tuple in items
-
-
-@given(sample_dict)
 def test_reversed(gen_dict):
 	hd = HopscotchDict(gen_dict)
 

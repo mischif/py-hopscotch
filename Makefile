@@ -9,7 +9,7 @@
 
 CI_OPTIONS="--cov-report xml --hypothesis-profile ci"
 
-.PHONY: test ci-test build
+.PHONY: build ci-test test typecheck
 
 clean:
 	rm -rf .coverage coverage.xml .eggs/ .hypothesis/ .pytest_cache/ *egg-info/ dist/ build/
@@ -24,3 +24,6 @@ ci-test:
 
 build:
 	python -m pep517.build -sb .
+
+typecheck:
+	mypy --python-version 3.6 --pretty --strict --strict-optional --warn-no-return --warn-unreachable --disallow-redefinition src/
