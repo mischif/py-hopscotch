@@ -48,7 +48,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install test dependencies
-        run: pip install .[test]
+        run: pip install .
 
       - name: Run tests
         run: make ci-test
