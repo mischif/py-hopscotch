@@ -51,7 +51,7 @@ setup(
 	keywords=["hopscotch", "dict", "hashtable"],
 
 	extras_require={
-		"test": ["codecov"],
+		"test": ["mypy"],
 		},
 
 	options={

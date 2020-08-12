@@ -9,7 +9,7 @@
 
 CI_OPTIONS="--cov-report xml --hypothesis-profile ci"
 
-.PHONY: build ci-test test typecheck
+.PHONY: ci-test clean release test typecheck
 
 clean:
 	rm -rf .coverage coverage.xml .eggs/ .hypothesis/ .pytest_cache/ *egg-info/ dist/ build/
@@ -22,7 +22,7 @@ test:
 ci-test:
 	python setup.py test --addopts ${CI_OPTIONS}
 
-build:
+release:
 	python -m pep517.build -sb .
 
 typecheck:
