@@ -44,7 +44,7 @@ skip_covered = true
 skip_empty = true
 
 [tool.pytest.ini_options]
-addopts = "-v -s --lf --cov=py_hopscotch_dict"
+addopts = "-v -s --lf --cov=py_hopscotch_dict --cov-report term"
 testpaths = ["test"]
 
 [tool.setuptools_scm]
