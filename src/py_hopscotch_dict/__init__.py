@@ -10,7 +10,7 @@
 from io import open
 from os.path import abspath, dirname, join
 
-from py_hopscotch_dict.hopscotchdict import HopscotchDict
+from py_hopscotch_dict.hopscotchdict import HopscotchDict as HopscotchDict
 
 module_root = dirname(abspath(__file__))
 
