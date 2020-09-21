@@ -103,7 +103,7 @@ class HopscotchDict(MutableMapping[Hashable, Any]):
 		elif table_log_size < 32:
 			struct_fmt = ">i I"
 		else:
-			struct_fmt = ">l L"
+			struct_fmt = ">l L"								  # pragma: no cover
 
 		return (bytearray(pack(struct_fmt,
 							   HopscotchDict.FREE_ENTRY,

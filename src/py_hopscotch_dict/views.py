@@ -21,7 +21,7 @@ from typing import (Any,
 					ValuesView
 					)
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:											  # pragma: no cover
 	from py_hopscotch_dict.hopscotchdict import HopscotchDict
 
 
