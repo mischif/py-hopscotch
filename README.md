@@ -11,7 +11,7 @@ py-hopscotch-dict is a package that contains a replacement for the standard Pyth
 
 Hopscotch hashing provides a number of benefits over the methods used in the standard `dict` implementation, most notably that insertions, deletions and lookups have an expected O(1) runtime.
 
-py-hopscotch-dict has not been tested in a concurrent environment and thusly cannot be guaranteed to function correctly in conjunction with multi-threading, across multiple processes or in an asynchronous environment
+py-hopscotch-dict has not been tested in a concurrent environment and thusly cannot be guaranteed to function correctly in conjunction with multi-threading, across multiple processes or in an asynchronous environment.
 
 Usage
 -----
